@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+numpy
+asteval
+python-multipart
+websockets
+wavekit
