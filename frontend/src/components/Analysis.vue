@@ -1,15 +1,17 @@
 <template>
-  <div class="bg-white dark:bg-[#1f1f1f] border border-gray-200 dark:border-[#303030] rounded mb-2 overflow-hidden transition-colors duration-300">
+  <div class="bg-white dark:bg-[#1f1f1f] border border-gray-200 dark:border-[#303030] rounded-sm mb-1 overflow-hidden transition-colors duration-300">
     <!-- Header: Metric Name & Value -->
-    <div class="flex justify-between items-center px-3 py-2 bg-gray-50 dark:bg-[#141414] transition-colors duration-300">
-      <div class="font-medium text-gray-900 dark:text-[#e0e0e0]">
+    <div class="flex justify-between items-center px-2 py-1.5 bg-gray-50 dark:bg-[#141414] transition-colors duration-300 analysis-header cursor-pointer hover:bg-gray-100 dark:hover:bg-[#1a1a1a]">
+      <div class="flex items-center gap-1.5 font-medium text-gray-900 dark:text-[#e0e0e0] text-sm">
+        <!-- Drag Handle -->
+        <holder-outlined class="cursor-move text-gray-400 dark:text-[#666] hover:text-gray-600 dark:hover:text-[#aaa]" />
         <span>{{ name }}</span>
       </div>
       
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
         <!-- Single Value Mode -->
         <template v-if="!isMultiValue">
-          <div class="w-[100px]">
+          <div class="w-[70px]">
             <a-progress 
               :percent="Math.min(Math.max(Number(value) * 100, 0), 100)" 
               :stroke-color="getProgressColor(Number(value))"
@@ -17,7 +19,7 @@
               size="small" 
             />
           </div>
-          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[45px] text-right">{{ (Number(value) * 100).toFixed(1) }}%</span>
+          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ (Number(value) * 100).toFixed(1) }}%</span>
         </template>
         
         <!-- Toggle Buttons -->
@@ -26,7 +28,7 @@
           <a-button 
             type="text" 
             size="small" 
-            class="!text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff]"
+            class="!text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-6 !px-1"
             @click="showTimeline = !showTimeline"
           >
             <template #icon>
@@ -38,7 +40,7 @@
           <a-button 
             type="text" 
             size="small" 
-            class="!text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff]"
+            class="!text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-6 !px-1"
             @click="expanded = !expanded"
           >
             <template #icon>
@@ -51,26 +53,16 @@
     </div>
 
     <!-- Timeline Section (Collapsible) -->
-    <div v-if="showTimeline" class="p-3 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
-      <div ref="chartRef" class="w-full h-[200px]"></div>
+    <div v-if="showTimeline" class="p-2 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
+      <div ref="chartRef" class="w-full h-[150px]"></div>
     </div>
 
-    <!-- Multi-Value List (Always visible if expanded or just below header? 
-         User said "one line per metric". Let's put it in the body but above the editor, 
-         or maybe replacing the single value in header? 
-         Actually, if it's a dict, it might be too large for header. 
-         Let's put it in a dedicated section below header but above editor if expanded, 
-         OR just show it in the header if it fits? 
-         User said: "if multi-indicator, have a total name (name), then value input a dict, each dict per line".
-         Let's put the breakdown in the body, visible when expanded or always visible?
-         Usually "Analysis" component implies the result is shown.
-         Let's show the breakdown list below the header.
-    -->
-    <div v-if="isMultiValue" class="px-3 py-2 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
-      <div v-for="(val, key) in (value as Record<string, number>)" :key="key" class="flex justify-between items-center py-1">
-        <span class="text-sm text-gray-600 dark:text-[#a0a0a0]">{{ key }}</span>
-        <div class="flex items-center gap-3">
-          <div class="w-[100px]">
+    <!-- Multi-Value List -->
+    <div v-if="isMultiValue" class="px-2 py-1 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
+      <div v-for="(val, key) in (value as Record<string, number>)" :key="key" class="flex justify-between items-center py-0.5">
+        <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ key }}</span>
+        <div class="flex items-center gap-2">
+          <div class="w-[70px]">
              <a-progress 
               :percent="Math.min(Math.max(Number(val) * 100, 0), 100)" 
               :stroke-color="getProgressColor(Number(val))"
@@ -78,25 +70,66 @@
               size="small" 
             />
           </div>
-          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[45px] text-right text-sm">{{ (Number(val) * 100).toFixed(1) }}%</span>
+          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ (Number(val) * 100).toFixed(1) }}%</span>
         </div>
       </div>
     </div>
 
     <!-- Body: Logic Editor (Collapsible) -->
-    <div v-if="expanded" class="p-3 bg-white dark:bg-[#1f1f1f] border-t border-gray-200 dark:border-[#303030] transition-colors duration-300">
-      <div class="border border-gray-200 dark:border-[#303030] rounded overflow-hidden mb-2">
-        <Codemirror
-          :model-value="code"
-          @update:model-value="$emit('update:code', $event)"
-          placeholder="Enter Python logic..."
-          :style="{ height: '150px' }"
-          :autofocus="true"
-          :indent-with-tab="true"
-          :tab-size="4"
-          :extensions="extensions"
-        />
+    <div v-if="expanded" class="p-2 bg-white dark:bg-[#1f1f1f] border-t border-gray-200 dark:border-[#303030] transition-colors duration-300">
+      
+      <!-- Transform Logic Editor -->
+      <div class="mb-2">
+        <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-0.5 uppercase tracking-wider">
+          Data Processing Logic
+        </div>
+        <div class="border border-gray-200 dark:border-[#303030] rounded-sm overflow-hidden flex flex-col">
+          <Codemirror
+            :model-value="transformCode"
+            @update:model-value="$emit('update:transformCode', $event)"
+            placeholder="# Enter logic to process raw waveforms..."
+            :style="{ height: transformEditorHeight + 'px' }"
+            :autofocus="false"
+            :indent-with-tab="true"
+            :tab-size="4"
+            :extensions="extensions"
+          />
+          <!-- Resize Handle -->
+          <div 
+            class="h-1.5 bg-gray-100 dark:bg-[#2a2a2a] cursor-row-resize hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors flex justify-center items-center"
+            @mousedown.prevent="startResize($event, 'transform')"
+          >
+             <div class="w-8 h-0.5 bg-gray-300 dark:bg-[#404040] rounded-full"></div>
+          </div>
+        </div>
       </div>
+
+      <!-- Metric Calculation Editor -->
+      <div class="mb-2">
+        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">
+          Metric Evaluation Logic
+        </div>
+        <div class="border border-gray-200 dark:border-[#303030] rounded-sm overflow-hidden flex flex-col">
+          <Codemirror
+            :model-value="metricCode"
+            @update:model-value="$emit('update:metricCode', $event)"
+            placeholder="# Enter logic to calculate overall metric value..."
+            :style="{ height: metricEditorHeight + 'px' }"
+            :autofocus="false"
+            :indent-with-tab="true"
+            :tab-size="4"
+            :extensions="extensions"
+          />
+          <!-- Resize Handle -->
+          <div 
+            class="h-1.5 bg-gray-100 dark:bg-[#2a2a2a] cursor-row-resize hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors flex justify-center items-center"
+            @mousedown.prevent="startResize($event, 'metric')"
+          >
+             <div class="w-8 h-0.5 bg-gray-300 dark:bg-[#404040] rounded-full"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="flex justify-end">
         <a-button type="primary" size="small" @click="$emit('run')">
           <play-circle-outlined /> Run
@@ -112,7 +145,8 @@ import {
   CodeOutlined, 
   UpOutlined, 
   PlayCircleOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  HolderOutlined
 } from '@ant-design/icons-vue';
 import * as echarts from 'echarts';
 import { Codemirror } from 'vue-codemirror';
@@ -122,12 +156,14 @@ import { oneDark } from '@codemirror/theme-one-dark';
 const props = defineProps<{
   name: string;
   value: number | Record<string, number>; // Support number or dict
-  code: string;
+  metricCode: string;
+  transformCode?: string;
   history?: Array<{ step: string | number; [key: string]: any }>;
 }>();
 
 defineEmits<{
-  (e: 'update:code', val: string): void;
+  (e: 'update:metricCode', val: string): void;
+  (e: 'update:transformCode', val: string): void;
   (e: 'run'): void;
 }>();
 
@@ -136,6 +172,34 @@ const showTimeline = ref(false);
 const chartRef = ref<HTMLElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
 const isDark = ref(false);
+const transformEditorHeight = ref(120);
+const metricEditorHeight = ref(120);
+
+// Resize logic
+const startResize = (e: MouseEvent, type: 'transform' | 'metric') => {
+  const startY = e.clientY;
+  const startHeight = type === 'transform' ? transformEditorHeight.value : metricEditorHeight.value;
+
+  const onMouseMove = (ev: MouseEvent) => {
+    const delta = ev.clientY - startY;
+    const newHeight = Math.max(50, startHeight + delta); // Min height 50px
+    if (type === 'transform') {
+      transformEditorHeight.value = newHeight;
+    } else {
+      metricEditorHeight.value = newHeight;
+    }
+  };
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = '';
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+  document.body.style.cursor = 'row-resize';
+};
 
 const isMultiValue = computed(() => {
   return typeof props.value === 'object' && props.value !== null;
