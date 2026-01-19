@@ -9,9 +9,16 @@
     <a-tab-pane
       v-for="tab in waveformTabs"
       :key="tab.id"
-      :tab="tabNames[tab.id]"
       :closable="false"
     >
+      <template #tab>
+        <span class="inline-flex items-center gap-1">
+          <span>{{ tabNames[tab.id] }}</span>
+          <a-tag v-if="baselineTabId === tab.id" color="blue" class="!text-[10px] !px-1 !py-0">
+            BL
+          </a-tag>
+        </span>
+      </template>
       <div class="flex items-center gap-2 mb-2">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Waveform Path</span>
         <a-input
@@ -20,11 +27,17 @@
           placeholder="Enter waveform file path"
           class="!text-xs"
         />
+        <a-button size="small" @click="toggleBaseline(tab.id)">
+          {{ baselineTabId === tab.id ? 'Unset' : 'Set Baseline' }}
+        </a-button>
       </div>
       <AnalysisGroup 
         :element="tab.rootGroup" 
         :is-root="true"
         :wave-path="tab.path"
+        :baseline-map="baselineMap"
+        :group-path="''"
+        :is-baseline="baselineTabId === tab.id"
         v-model:zoomStart="tab.zoomStart"
         v-model:zoomEnd="tab.zoomEnd"
       />
@@ -110,6 +123,7 @@ const waveformTabs = ref<WaveformTab[]>([
 ]);
 const activeTabId = ref('waveform-1');
 const nextTabIndex = ref(2);
+const baselineTabId = ref('waveform-1');
 
 const getBaseName = (path: string) => {
   const fileName = path.split('/').pop() ?? '';
@@ -129,6 +143,36 @@ const tabNames = computed(() => {
   return result;
 });
 
+const buildGroupPath = (parentPath: string, groupName: string) => {
+  if (!groupName) return parentPath;
+  return parentPath ? `${parentPath}/${groupName}` : groupName;
+};
+
+const buildSignature = (groupPath: string, analysisName: string) => {
+  return groupPath ? `${groupPath}/${analysisName}` : analysisName;
+};
+
+const baselineMap = computed(() => {
+  const baselineTab = waveformTabs.value.find(tab => tab.id === baselineTabId.value);
+  if (!baselineTab) return {};
+  const map: Record<string, { result: any; history: any[] | undefined }> = {};
+
+  const walk = (node: any, path: string) => {
+    if (node?.type === 'group') {
+      const nextPath = buildGroupPath(path, node.name ?? '');
+      (node.children ?? []).forEach((child: any) => walk(child, nextPath));
+      return;
+    }
+    if (node?.type === 'analysis') {
+      const signature = buildSignature(path, node.name ?? '');
+      map[signature] = { result: node.result, history: node.history };
+    }
+  };
+
+  walk(baselineTab.rootGroup, '');
+  return map;
+});
+
 const addWaveformTab = () => {
   const id = `waveform-${nextTabIndex.value}`;
   nextTabIndex.value += 1;
@@ -146,5 +190,9 @@ const handleTabEdit = (_targetKey: string | MouseEvent, action: 'add' | 'remove'
   if (action === 'add') {
     addWaveformTab();
   }
+};
+
+const toggleBaseline = (tabId: string) => {
+  baselineTabId.value = baselineTabId.value === tabId ? '' : tabId;
 };
 </script>

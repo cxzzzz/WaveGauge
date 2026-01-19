@@ -13,3 +13,40 @@
   display: block;
   line-height: 1;
 }
+
+.dark .ant-tabs .ant-tabs-tab-btn {
+  color: #9ca3af;
+}
+
+.dark .ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #e5e7eb;
+}
+
+.dark .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
+  background: #1f1f1f;
+  border-color: #333;
+}
+
+.dark .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active {
+  background: #262626;
+  border-color: #444;
+}
+
+.dark .ant-tabs-nav .ant-tabs-nav-add {
+  color: #9ca3af;
+  background: #1f1f1f;
+  border-color: #444;
+}
+
+.dark .ant-tabs-nav .ant-tabs-nav-add:hover {
+  color: #e5e7eb;
+  border-color: #666;
+}
+
+.dark .ant-progress-inner {
+  background-color: #2b2b2b;
+}
+
+.dark .ant-progress-text {
+  color: #a0a0a0;
+}

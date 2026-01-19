@@ -113,6 +113,11 @@
             v-model:transformCode="child.transformCode"
             v-model:result="child.result"
             v-model:history="child.history"
+            :group-path="child.type === 'group' ? buildGroupPath(groupPathModel, child.name) : groupPathModel"
+            :baseline-map="baselineMap"
+            :is-baseline="isBaseline"
+            :baseline-result="child.type === 'analysis' ? baselineEntryFor(child.name)?.result : undefined"
+            :baseline-history="child.type === 'analysis' ? baselineEntryFor(child.name)?.history : undefined"
             @delete="deleteChild(index)"
           />
         </template>
@@ -149,11 +154,14 @@ defineOptions({
 });
 
 const props = defineProps<{
-  element: any; // The group data object
+  element: any;
   isRoot?: boolean;
   wavePath?: string;
   zoomStart?: number;
   zoomEnd?: number;
+  groupPath?: string;
+  isBaseline?: boolean;
+  baselineMap?: Record<string, { result: any; history: any[] | undefined }>;
 }>();
 
 const emit = defineEmits<{
@@ -175,6 +183,18 @@ const zoomEndModel = computed({
   get: () => props.zoomEnd ?? 100,
   set: (val: number) => emit('update:zoomEnd', val)
 });
+const groupPathModel = computed(() => props.groupPath ?? '');
+const buildGroupPath = (parentPath: string, groupName: string) => {
+  if (!groupName) return parentPath;
+  return parentPath ? `${parentPath}/${groupName}` : groupName;
+};
+const buildSignature = (groupPath: string, analysisName: string) => {
+  return groupPath ? `${groupPath}/${analysisName}` : analysisName;
+};
+const baselineEntryFor = (analysisName: string) => {
+  const signature = buildSignature(groupPathModel.value, analysisName ?? '');
+  return props.baselineMap?.[signature];
+};
 
 const startEditing = () => {
   isEditingName.value = true;

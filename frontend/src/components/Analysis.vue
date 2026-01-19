@@ -22,17 +22,70 @@
       </div>
       
       <div class="flex items-center gap-2">
-        <!-- Single Value Mode -->
         <template v-if="!isMultiValue">
-          <div class="w-[64px]">
-            <a-progress 
-              :percent="displayPercent"
-              :stroke-color="displayColor"
-              :show-info="false"
-              size="small" 
-            />
-          </div>
-          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ displayText }}</span>
+          <template v-for="item in displayItems" :key="item.key">
+            <template v-if="item.hasBaseline">
+              <a-popover placement="bottomRight">
+                <template #content>
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Current</span>
+                      <div class="flex items-center gap-2">
+                        <div class="w-[70px]">
+                          <a-progress
+                            :percent="item.currentPercent"
+                            :stroke-color="item.currentColor"
+                            :show-info="false"
+                            size="small"
+                          />
+                        </div>
+                        <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.currentText }}</span>
+                      </div>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Baseline</span>
+                      <div class="flex items-center gap-2">
+                        <div class="w-[70px]">
+                          <a-progress
+                            :percent="item.baselinePercent"
+                            :stroke-color="item.baselineColor"
+                            :show-info="false"
+                            size="small"
+                          />
+                        </div>
+                        <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.baselineText }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                <div class="flex items-center gap-0.5">
+                  <div class="w-[64px]">
+                    <a-progress 
+                      :percent="item.currentPercent"
+                      :stroke-color="item.currentColor"
+                      :show-info="false"
+                      size="small" 
+                    />
+                  </div>
+                  <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ item.currentText }}</span>
+                  <span :class="item.deltaPercentClass" class="text-[10px] font-semibold min-w-[40px] text-right">
+                    {{ item.deltaPercentText }}
+                  </span>
+                </div>
+              </a-popover>
+            </template>
+            <template v-else>
+              <div class="w-[64px]">
+                <a-progress 
+                  :percent="item.currentPercent"
+                  :stroke-color="item.currentColor"
+                  :show-info="false"
+                  size="small" 
+                />
+              </div>
+              <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ item.currentText }}</span>
+            </template>
+          </template>
         </template>
         
         <!-- Toggle Buttons -->
@@ -109,23 +162,79 @@
     </div>
 
     <div v-if="showTimeline" class="p-1.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
-      <div ref="chartRef" class="w-full aspect-[16/5]"></div>
+      <div v-if="hasBaselineComparison" class="w-full aspect-[16/5] grid grid-rows-2 gap-1">
+        <div ref="chartRef" class="w-full h-full"></div>
+        <div ref="baselineChartRef" class="w-full h-full"></div>
+      </div>
+      <div v-else ref="chartRef" class="w-full aspect-[16/5]"></div>
     </div>
 
     <!-- Multi-Value List -->
     <div v-if="isMultiValue" class="px-1.5 py-0.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
-      <div v-for="(val, key) in (value as Record<string, number>)" :key="key" class="flex justify-between items-center py-0.5">
-        <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ key }}</span>
+      <div v-for="item in displayItems" :key="item.key" class="flex justify-between items-center py-0.5">
+        <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ item.label }}</span>
         <div class="flex items-center gap-2">
-          <div class="w-[64px]">
-             <a-progress 
-              :percent="getProgressPercent(Number(val), String(key))" 
-              :stroke-color="getProgressColor(Number(val))"
-              :show-info="false"
-              size="small" 
-            />
-          </div>
-          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[48px] text-right text-xs">{{ formatNumber(Number(val)) }}</span>
+          <template v-if="item.hasBaseline">
+            <a-popover placement="bottomRight">
+              <template #content>
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Current</span>
+                    <div class="flex items-center gap-2">
+                      <div class="w-[70px]">
+                        <a-progress
+                          :percent="item.currentPercent"
+                          :stroke-color="item.currentColor"
+                          :show-info="false"
+                          size="small"
+                        />
+                      </div>
+                      <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.currentText }}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Baseline</span>
+                    <div class="flex items-center gap-2">
+                      <div class="w-[70px]">
+                        <a-progress
+                          :percent="item.baselinePercent"
+                          :stroke-color="item.baselineColor"
+                          :show-info="false"
+                          size="small"
+                        />
+                      </div>
+                      <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.baselineText }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <div class="flex items-center gap-0.5">
+                <div class="w-[64px]">
+                  <a-progress 
+                    :percent="item.currentPercent"
+                    :stroke-color="item.currentColor"
+                    :show-info="false"
+                    size="small" 
+                  />
+                </div>
+                <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[48px] text-right text-xs">{{ item.currentText }}</span>
+                <span :class="item.deltaPercentClass" class="text-[10px] font-semibold min-w-[40px] text-right">
+                  {{ item.deltaPercentText }}
+                </span>
+              </div>
+            </a-popover>
+          </template>
+          <template v-else>
+            <div class="w-[64px]">
+               <a-progress 
+                :percent="item.currentPercent"
+                :stroke-color="item.currentColor"
+                :show-info="false"
+                size="small" 
+              />
+            </div>
+            <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[48px] text-right text-xs">{{ item.currentText }}</span>
+          </template>
         </div>
       </div>
     </div>
@@ -240,6 +349,9 @@ const props = defineProps<{
   chartType?: string;
   summaryType?: string;
   maxValue?: number;
+  isBaseline?: boolean;
+  baselineResult?: number | Record<string, number>;
+  baselineHistory?: Array<{ step: string | number; [key: string]: any }>;
 }>();
 
 const emit = defineEmits<{
@@ -289,6 +401,50 @@ const maxValueModel = computed({
 
 const hasResult = computed(() => props.result !== undefined);
 const value = computed(() => props.result ?? 0);
+const formatNumber = (val: number) => {
+  if (!Number.isFinite(val)) return '--';
+  const fixed = val.toFixed(3);
+  return fixed.replace(/\.?0+$/, '');
+};
+const formatOptionalNumber = (val: unknown) => {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return '--';
+  return formatNumber(num);
+};
+const historyData = computed(() => props.history ?? []);
+
+const isMultiValue = computed(() => {
+  return typeof value.value === 'object' && value.value !== null;
+});
+
+const hasBaselineComparison = computed(() => {
+  if (props.isBaseline) return false;
+  if (props.baselineHistory && props.baselineHistory.length) return true;
+  return props.baselineResult !== undefined;
+});
+const baselineHistoryData = computed(() => props.baselineHistory ?? []);
+const baselineSummaryValue = computed(() => {
+  if (!hasBaselineComparison.value) return undefined;
+  const summaryType = props.summaryType ?? 'avg';
+  if (baselineHistoryData.value.length) {
+    return calculateSummary(getVisibleHistory(baselineHistoryData.value), summaryType);
+  }
+  return props.baselineResult;
+});
+
+const getMaxForKey = (key: string) => {
+  if (props.maxValue && props.maxValue > 0) return props.maxValue;
+  const visible = getVisibleHistory();
+  let maxVal = 0;
+  visible.forEach(item => {
+    const v = Number(item[key]);
+    if (Number.isFinite(v)) {
+      if (v > maxVal) maxVal = v;
+    }
+  });
+  return maxVal > 0 ? maxVal : 1;
+};
+
 const effectiveMax = computed(() => {
   if (props.maxValue && props.maxValue > 0) return props.maxValue;
   const visible = getVisibleHistory();
@@ -305,45 +461,113 @@ const effectiveMax = computed(() => {
   });
   return maxVal > 0 ? maxVal : 1;
 });
-const displayPercent = computed(() => {
-  if (!hasResult.value) return 0;
-  const v = Number(value.value);
-  const maxV = Number(effectiveMax.value) || 1;
-  return Math.min(Math.max((v / maxV) * 100, 0), 100);
-});
-const displayColor = computed(() => {
-  if (!hasResult.value) return '#d1d5db';
-  return getProgressColor(Number(value.value));
-});
-const formatNumber = (val: number) => {
-  if (!Number.isFinite(val)) return '--';
-  const fixed = val.toFixed(3);
-  return fixed.replace(/\.?0+$/, '');
-};
-const displayText = computed(() => {
-  if (!hasResult.value) return '--';
-  return formatNumber(Number(value.value));
-});
-const historyData = computed(() => props.history ?? []);
 
-const getMaxForKey = (key: string) => {
-  if (props.maxValue && props.maxValue > 0) return props.maxValue;
-  const visible = getVisibleHistory();
-  let maxVal = 0;
-  visible.forEach(item => {
-    const v = Number(item[key]);
-    if (Number.isFinite(v)) {
-      if (v > maxVal) maxVal = v;
-    }
+const getMaxValueForDisplay = (key: string) => {
+  if (key === '__single__') return Number(effectiveMax.value) || 1;
+  return Number(getMaxForKey(key)) || 1;
+};
+
+const getBaselineValueForKey = (key: string) => {
+  if (!hasBaselineComparison.value) return undefined;
+  const base = baselineSummaryValue.value;
+  if (base && typeof base === 'object') {
+    return (base as Record<string, number>)[key];
+  }
+  return base as number | undefined;
+};
+
+const calcPercent = (val: number | undefined, maxVal: number) => {
+  const numeric = Number(val);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.min(Math.max((numeric / maxVal) * 100, 0), 100);
+};
+
+const calcDelta = (current: number | undefined, baseline: number | undefined) => {
+  const cur = Number(current);
+  const base = Number(baseline);
+  if (!Number.isFinite(cur) || !Number.isFinite(base)) return undefined;
+  if (base === 0) return cur >= 0 ? 'pos_inf' : 'neg_inf';
+  return ((cur - base) / base) * 100;
+};
+
+type DisplayItem = {
+  key: string;
+  label: string;
+  hasBaseline: boolean;
+  currentText: string;
+  baselineText: string;
+  currentPercent: number;
+  baselinePercent: number;
+  currentColor: string;
+  baselineColor: string;
+  deltaPercentText: string;
+  deltaPercentClass: string;
+};
+
+const buildDisplayItem = (
+  key: string,
+  label: string,
+  currentValue: number | undefined,
+  baselineValue: number | undefined
+): DisplayItem => {
+  const maxVal = getMaxValueForDisplay(key);
+  const currentPercent = calcPercent(currentValue, maxVal);
+  const baselinePercent = calcPercent(baselineValue, maxVal);
+  const currentColor = Number.isFinite(Number(currentValue))
+    ? getProgressColor(Number(currentValue))
+    : '#d1d5db';
+  const baselineColor = Number.isFinite(Number(baselineValue))
+    ? getProgressColor(Number(baselineValue))
+    : '#d1d5db';
+  const delta = calcDelta(currentValue, baselineValue);
+  const deltaPercentText =
+    delta === 'pos_inf'
+      ? '(+∞)'
+      : delta === 'neg_inf'
+        ? '(-∞)'
+        : delta === undefined
+          ? '--'
+          : `(${delta >= 0 ? '+' : '-'}${Math.abs(delta).toFixed(1)}%)`;
+  const deltaPercentClass =
+    delta === 'pos_inf'
+      ? 'text-red-500'
+      : delta === 'neg_inf'
+        ? 'text-green-500'
+        : delta === undefined
+          ? 'text-gray-400 dark:text-[#8a8a8a]'
+          : delta > 0
+            ? 'text-red-500'
+            : delta < 0
+              ? 'text-green-500'
+              : 'text-gray-400 dark:text-[#8a8a8a]';
+  return {
+    key,
+    label,
+    hasBaseline: hasBaselineComparison.value,
+    currentText: formatOptionalNumber(currentValue),
+    baselineText: formatOptionalNumber(baselineValue),
+    currentPercent,
+    baselinePercent,
+    currentColor,
+    baselineColor,
+    deltaPercentText,
+    deltaPercentClass
+  };
+};
+
+const displayItems = computed<DisplayItem[]>(() => {
+  if (!isMultiValue.value) {
+    const currentValue = hasResult.value ? Number(value.value) : undefined;
+    const baselineValue = getBaselineValueForKey('__single__');
+    return [buildDisplayItem('__single__', '', currentValue, baselineValue)];
+  }
+  const resultMap = value.value as Record<string, number>;
+  return Object.keys(resultMap ?? {}).map((key) => {
+    const currentValue = Number(resultMap[key]);
+    const baselineValue = getBaselineValueForKey(key);
+    return buildDisplayItem(key, key, currentValue, baselineValue);
   });
-  return maxVal > 0 ? maxVal : 1;
-};
-
-const getProgressPercent = (val: number, key: string) => {
-  if (!Number.isFinite(val)) return 0;
-  const maxVal = Number(getMaxForKey(key)) || 1;
-  return Math.min(Math.max((val / maxVal) * 100, 0), 100);
-};
+});
 
 watch(() => props.name, (val) => {
   localName.value = val;
@@ -466,10 +690,6 @@ const startResize = (e: MouseEvent) => {
   document.body.style.cursor = 'row-resize';
 };
 
-const isMultiValue = computed(() => {
-  return typeof value.value === 'object' && value.value !== null;
-});
-
 const extensions = computed(() => {
   return isDark.value ? [python(), oneDark] : [python()];
 });
@@ -517,8 +737,9 @@ const calculateSummary = (
   return Object.keys(result).length ? result : undefined;
 };
 
-const getVisibleHistory = () => {
-  const history = historyData.value;
+const getVisibleHistory = (
+  history: Array<{ step: string | number; [key: string]: any }> = historyData.value
+) => {
   const length = history.length;
   if (!length) return [];
   const zoomStart = props.zoomStart ?? 0;
@@ -549,30 +770,44 @@ watch(
 );
 
 // Initialize Chart
-const initChart = () => {
-  if (chartRef.value) {
-    chartInstance = echarts.init(chartRef.value);
-    chartInstance.on('datazoom', handleDataZoom);
-    updateChart();
-  }
-};
+const baselineChartRef = ref<HTMLElement | null>(null);
+let baselineChartInstance: echarts.ECharts | null = null;
 
-const updateChart = () => {
-  if (!chartInstance || !historyData.value || historyData.value.length === 0) return;
-
+const buildChartOption = (
+  history: Array<{ step: string | number; [key: string]: any }>,
+  chartType: string,
+  zoomStart: number,
+  zoomEnd: number,
+  showSlider: boolean
+): echarts.EChartsOption => {
   const textColor = isDark.value ? '#a0a0a0' : '#666';
   const axisColor = isDark.value ? '#404040' : '#e0e0e0';
-  const zoomStart = props.zoomStart ?? 0;
-  const zoomEnd = props.zoomEnd ?? 100;
-  const chartType = props.chartType ?? 'line';
-  const steps = historyData.value.map(item => String(item.step));
-  const keys = Object.keys(historyData.value[0] ?? {}).filter(k => k !== 'step');
-
+  const steps = history.map(item => String(item.step));
+  const keys = Object.keys(history[0] ?? {}).filter(k => k !== 'step');
+  const gridBottom = showSlider ? '20%' : '8%';
+  const dataZoom: echarts.DataZoomComponentOption[] = [
+    {
+      type: 'inside',
+      xAxisIndex: 0,
+      start: zoomStart,
+      end: zoomEnd
+    }
+  ];
+  if (showSlider) {
+    dataZoom.push({
+      type: 'slider',
+      xAxisIndex: 0,
+      height: '10%',
+      bottom: '2%',
+      start: zoomStart,
+      end: zoomEnd
+    });
+  }
   const option: echarts.EChartsOption = {
     backgroundColor: 'transparent',
     grid: {
       top: '6%',
-      bottom: '20%',
+      bottom: gridBottom,
       left: '6%',
       right: '6%',
       containLabel: true
@@ -598,22 +833,7 @@ const updateChart = () => {
       axisLabel: { color: textColor },
       splitLine: { lineStyle: { color: isDark.value ? '#333' : '#eee' } }
     },
-    dataZoom: [
-      {
-        type: 'inside',
-        xAxisIndex: 0,
-        start: zoomStart,
-        end: zoomEnd
-      },
-      {
-        type: 'slider',
-        xAxisIndex: 0,
-        height: '10%',
-        bottom: '2%',
-        start: zoomStart,
-        end: zoomEnd
-      }
-    ],
+    dataZoom,
     series: []
   };
 
@@ -622,7 +842,7 @@ const updateChart = () => {
     const heatmapData: Array<[number, number, number]> = [];
     let maxValue = 0;
     yCategories.forEach((key, yIndex) => {
-      historyData.value.forEach((item, xIndex) => {
+      history.forEach((item, xIndex) => {
         const rawValue = Number(item[key] ?? 0);
         const value = Number.isFinite(rawValue) ? rawValue : 0;
         maxValue = Math.max(maxValue, value);
@@ -661,7 +881,7 @@ const updateChart = () => {
     const isStacked = chartType === 'stacked_bar' || chartType === 'stacked_line';
     const seriesType = chartType.includes('bar') ? 'bar' : 'line';
     const series = keys.map(key => {
-      const data = historyData.value.map(item => item[key]);
+      const data = history.map(item => item[key]);
       if (seriesType === 'line') {
         const lineItem: echarts.LineSeriesOption = {
           name: key,
@@ -688,12 +908,50 @@ const updateChart = () => {
     });
     option.series = series as echarts.SeriesOption[];
   }
+  return option;
+};
 
-  isSettingZoom.value = true;
-  chartInstance.setOption(option);
-  setTimeout(() => {
-    isSettingZoom.value = false;
-  }, 0);
+const initCharts = () => {
+  if (chartRef.value) {
+    chartInstance = echarts.init(chartRef.value);
+    chartInstance.on('datazoom', handleDataZoom);
+  }
+  if (hasBaselineComparison.value && baselineChartRef.value) {
+    baselineChartInstance = echarts.init(baselineChartRef.value);
+    baselineChartInstance.on('datazoom', handleDataZoom);
+  }
+  updateCharts();
+};
+
+const updateCharts = () => {
+  if (!chartInstance && !baselineChartInstance) return;
+  const zoomStart = props.zoomStart ?? 0;
+  const zoomEnd = props.zoomEnd ?? 100;
+  const chartType = props.chartType ?? 'line';
+  if (chartInstance) {
+    if (historyData.value.length) {
+      const option = buildChartOption(historyData.value, chartType, zoomStart, zoomEnd, true);
+      isSettingZoom.value = true;
+      chartInstance.setOption(option);
+      setTimeout(() => {
+        isSettingZoom.value = false;
+      }, 0);
+    } else {
+      chartInstance.clear();
+    }
+  }
+  if (baselineChartInstance) {
+    if (baselineHistoryData.value.length) {
+      const option = buildChartOption(baselineHistoryData.value, chartType, zoomStart, zoomEnd, false);
+      isSettingZoom.value = true;
+      baselineChartInstance.setOption(option);
+      setTimeout(() => {
+        isSettingZoom.value = false;
+      }, 0);
+    } else {
+      baselineChartInstance.clear();
+    }
+  }
 };
 
 const handleDataZoom = (event: any) => {
@@ -715,8 +973,8 @@ onMounted(() => {
     mutations.forEach((mutation) => {
       if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
         isDark.value = document.documentElement.classList.contains('dark');
-        if (showTimeline.value && chartInstance) {
-           updateChart();
+        if (showTimeline.value) {
+           updateCharts();
         }
       }
     });
@@ -732,30 +990,51 @@ onMounted(() => {
 watch(showTimeline, async (val) => {
   if (val) {
     await nextTick();
-    initChart();
+    initCharts();
   } else {
     if (chartInstance) {
       chartInstance.dispose();
       chartInstance = null;
     }
+    if (baselineChartInstance) {
+      baselineChartInstance.dispose();
+      baselineChartInstance = null;
+    }
   }
 });
 
 watch(() => props.history, () => {
-  if (showTimeline.value && chartInstance) {
-    updateChart();
+  if (showTimeline.value) {
+    updateCharts();
   }
 }, { deep: true });
 
 watch([() => props.zoomStart, () => props.zoomEnd, () => props.chartType], () => {
-  if (showTimeline.value && chartInstance) {
-    updateChart();
+  if (showTimeline.value) {
+    updateCharts();
   }
 });
+
+watch([baselineHistoryData, hasBaselineComparison], () => {
+  if (showTimeline.value) {
+    if (chartInstance) {
+      chartInstance.dispose();
+      chartInstance = null;
+    }
+    if (baselineChartInstance) {
+      baselineChartInstance.dispose();
+      baselineChartInstance = null;
+    }
+    nextTick().then(() => {
+      initCharts();
+    });
+  }
+}, { deep: true });
 
 // Handle Resize
 const handleResize = () => {
   chartInstance?.resize();
+  baselineChartInstance?.resize();
 };
 
 window.addEventListener('resize', handleResize);
@@ -763,6 +1042,7 @@ window.addEventListener('resize', handleResize);
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
   chartInstance?.dispose();
+  baselineChartInstance?.dispose();
   observer?.disconnect();
 });
 </script>
