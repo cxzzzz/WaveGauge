@@ -119,13 +119,13 @@
         <div class="flex items-center gap-2">
           <div class="w-[64px]">
              <a-progress 
-              :percent="Math.min(Math.max(Number(val) * 100, 0), 100)" 
+              :percent="getProgressPercent(Number(val), String(key))" 
               :stroke-color="getProgressColor(Number(val))"
               :show-info="false"
               size="small" 
             />
           </div>
-          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ (Number(val) * 100).toFixed(1) }}%</span>
+          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[48px] text-right text-xs">{{ formatNumber(Number(val)) }}</span>
         </div>
       </div>
     </div>
@@ -153,6 +153,19 @@
             size="small"
             class="!text-xs w-[140px]"
             :options="summaryTypeOptions"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            Max Value
+          </div>
+          <a-input-number
+            v-model:value="maxValueModel"
+            size="small"
+            :min="0"
+            :step="0.01"
+            class="!text-xs w-[120px]"
+            placeholder="Auto"
           />
         </div>
       </div>
@@ -226,6 +239,7 @@ const props = defineProps<{
   zoomEnd?: number;
   chartType?: string;
   summaryType?: string;
+  maxValue?: number;
 }>();
 
 const emit = defineEmits<{
@@ -239,6 +253,7 @@ const emit = defineEmits<{
   (e: 'update:zoomEnd', val: number): void;
   (e: 'update:chartType', val: string): void;
   (e: 'update:summaryType', val: string): void;
+  (e: 'update:maxValue', val: number | undefined): void;
   (e: 'delete'): void;
 }>();
 
@@ -267,22 +282,68 @@ const summaryTypeModel = computed({
   get: () => props.summaryType ?? 'avg',
   set: (val: string) => emit('update:summaryType', val)
 });
+const maxValueModel = computed({
+  get: () => props.maxValue,
+  set: (val: number | null) => emit('update:maxValue', val === null ? undefined : val ?? undefined)
+});
 
 const hasResult = computed(() => props.result !== undefined);
 const value = computed(() => props.result ?? 0);
+const effectiveMax = computed(() => {
+  if (props.maxValue && props.maxValue > 0) return props.maxValue;
+  const visible = getVisibleHistory();
+  const keys = Object.keys(visible[0] ?? {}).filter(k => k !== 'step');
+  if (keys.length !== 1) return 1;
+  const key = keys[0];
+  if (!key) return 1;
+  let maxVal = 0;
+  visible.forEach(item => {
+    const v = Number(item[key]);
+    if (Number.isFinite(v)) {
+      if (v > maxVal) maxVal = v;
+    }
+  });
+  return maxVal > 0 ? maxVal : 1;
+});
 const displayPercent = computed(() => {
   if (!hasResult.value) return 0;
-  return Math.min(Math.max(Number(value.value) * 100, 0), 100);
+  const v = Number(value.value);
+  const maxV = Number(effectiveMax.value) || 1;
+  return Math.min(Math.max((v / maxV) * 100, 0), 100);
 });
 const displayColor = computed(() => {
   if (!hasResult.value) return '#d1d5db';
   return getProgressColor(Number(value.value));
 });
+const formatNumber = (val: number) => {
+  if (!Number.isFinite(val)) return '--';
+  const fixed = val.toFixed(3);
+  return fixed.replace(/\.?0+$/, '');
+};
 const displayText = computed(() => {
   if (!hasResult.value) return '--';
-  return `${(Number(value.value) * 100).toFixed(1)}%`;
+  return formatNumber(Number(value.value));
 });
 const historyData = computed(() => props.history ?? []);
+
+const getMaxForKey = (key: string) => {
+  if (props.maxValue && props.maxValue > 0) return props.maxValue;
+  const visible = getVisibleHistory();
+  let maxVal = 0;
+  visible.forEach(item => {
+    const v = Number(item[key]);
+    if (Number.isFinite(v)) {
+      if (v > maxVal) maxVal = v;
+    }
+  });
+  return maxVal > 0 ? maxVal : 1;
+};
+
+const getProgressPercent = (val: number, key: string) => {
+  if (!Number.isFinite(val)) return 0;
+  const maxVal = Number(getMaxForKey(key)) || 1;
+  return Math.min(Math.max((val / maxVal) * 100, 0), 100);
+};
 
 watch(() => props.name, (val) => {
   localName.value = val;
@@ -321,48 +382,35 @@ const runAnalysis = async () => {
       errorMessage.value = '';
       
       // Update history/table data
-      if (response.data.data && response.data.data.length > 0) {
-          const newHistory: any[] = [];
-          
-          // Map backend data to history format based on analysis type
-          // This is a simplified mapping for the demo
-          response.data.data.forEach((row: any, index: number) => {
-             if (index < 20) { // Limit for chart
-                 const step = row.timestamp ? String(row.timestamp) : String(index);
-                 
-                 // Basic heuristic mapping based on what keys are available
-                 if (props.name.includes('Compute')) {
-                     newHistory.push({
-                         step,
-                         value: row.sm_active || 0
-                     });
-                 } else if (props.name.includes('Memory')) {
-                     // Simple demo mapping
-                     newHistory.push({
-                         step,
-                         value: (row.dram_read || 0) / 100 
-                     });
-                 } else if (props.name.includes('L2')) {
-                     // Map to multi-value keys
-                     newHistory.push({
-                         step,
-                         "L2 Hit Rate": row.l2_hit || 0,
-                         "L2 Throughput": (row.l2_hit || 0) * 0.5,
-                         "L2 Write Hit Rate": (row.l2_hit || 0) * 1.1
-                     });
-                 } else {
-                    // Fallback generic mapping if possible, or just push row
-                    // For now, if no match, maybe we don't push?
-                    // Or we assume single value 'sm_active' as default?
-                    // Let's assume 'sm_active' for unknown types for now to show something
-                    newHistory.push({
-                        step,
-                        value: row.sm_active || 0
-                     });
-                 }
-             }
+      const payload = response.data?.data;
+      if (payload && Array.isArray(payload)) {
+        const newHistory: any[] = [];
+        payload.forEach((row: any, index: number) => {
+          const step = String(row?.timestamp ?? index);
+          const entry: Record<string, number | string> = { step };
+          Object.keys(row ?? {}).forEach((key) => {
+            if (key === 'timestamp') return;
+            const numericValue = Number(row[key]);
+            if (Number.isFinite(numericValue)) entry[key] = numericValue;
           });
-          emit('update:history', newHistory);
+          newHistory.push(entry);
+        });
+        emit('update:history', newHistory);
+      } else if (payload && payload.timestamps && payload.values) {
+        const timestamps: any[] = payload.timestamps;
+        const valuesObj: Record<string, any[]> = payload.values;
+        const len = Array.isArray(timestamps) ? timestamps.length : 0;
+        const keys = Object.keys(valuesObj ?? {});
+        const newHistory: any[] = [];
+        for (let i = 0; i < len; i++) {
+          const entry: Record<string, number | string> = { step: String(timestamps[i]) };
+          keys.forEach((k) => {
+            const v = Number(valuesObj[k]?.[i]);
+            if (Number.isFinite(v)) entry[k] = v;
+          });
+          newHistory.push(entry);
+        }
+        emit('update:history', newHistory);
       }
       
     } else {
