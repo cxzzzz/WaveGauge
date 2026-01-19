@@ -131,7 +131,7 @@
       </div>
 
       <div class="flex justify-end">
-        <a-button type="primary" size="small" @click="$emit('run')">
+        <a-button type="primary" size="small" @click="runAnalysis">
           <play-circle-outlined /> Run
         </a-button>
       </div>
@@ -152,28 +152,103 @@ import * as echarts from 'echarts';
 import { Codemirror } from 'vue-codemirror';
 import { python } from '@codemirror/lang-python';
 import { oneDark } from '@codemirror/theme-one-dark';
+import axios from 'axios';
+import { message } from 'ant-design-vue';
+
+const API_URL = 'http://localhost:8000/api';
 
 const props = defineProps<{
   name: string;
-  value: number | Record<string, number>; // Support number or dict
   metricCode: string;
   transformCode?: string;
-  history?: Array<{ step: string | number; [key: string]: any }>;
 }>();
 
 defineEmits<{
   (e: 'update:metricCode', val: string): void;
   (e: 'update:transformCode', val: string): void;
-  (e: 'run'): void;
 }>();
+
+const value = ref<number | Record<string, number>>(0);
+const history = ref<Array<{ step: string | number; [key: string]: any }>>([]);
+
+const runAnalysis = async () => {
+  message.loading(`Running analysis for ${props.name}...`, 0);
+  
+  try {
+    const response = await axios.post(`${API_URL}/analyze`, {
+      file_path: 'dummy.fsdb', // Placeholder
+      transform_code: props.transformCode,
+      metric_code: props.metricCode
+    });
+
+    if (response.data.status === 'success') {
+      message.destroy();
+      message.success(`Analysis for ${props.name} completed!`);
+      
+      // Update value
+      value.value = response.data.metrics;
+      
+      // Update history/table data
+      if (response.data.data && response.data.data.length > 0) {
+          history.value = [];
+          
+          // Map backend data to history format based on analysis type
+          // This is a simplified mapping for the demo
+          response.data.data.forEach((row: any, index: number) => {
+             if (index < 20) { // Limit for chart
+                 const step = row.timestamp ? String(row.timestamp) : String(index);
+                 
+                 if (props.name.includes('Compute')) {
+                     history.value.push({
+                         step,
+                         value: row.sm_active || 0
+                     });
+                 } else if (props.name.includes('Memory')) {
+                     // Simple demo mapping
+                     history.value.push({
+                         step,
+                         value: (row.dram_read || 0) / 100 
+                     });
+                 } else if (props.name.includes('L2')) {
+                     // Map to multi-value keys
+                     history.value.push({
+                         step,
+                         "L2 Hit Rate": row.l2_hit || 0,
+                         "L2 Throughput": (row.l2_hit || 0) * 0.5,
+                         "L2 Write Hit Rate": (row.l2_hit || 0) * 1.1
+                     });
+                 } else {
+                    // Fallback generic mapping if possible, or just push row
+                    // For now, if no match, maybe we don't push?
+                    // Or we assume single value 'sm_active' as default?
+                    // Let's assume 'sm_active' for unknown types for now to show something
+                    history.value.push({
+                        step,
+                        value: row.sm_active || 0
+                     });
+                 }
+             }
+          });
+      }
+      
+    } else {
+      message.destroy();
+      message.error(`Error: ${response.data.error}`);
+    }
+  } catch (error: any) {
+    message.destroy();
+    message.error(`Request failed: ${error.message}`);
+  }
+};
 
 const expanded = ref(false);
 const showTimeline = ref(false);
 const chartRef = ref<HTMLElement | null>(null);
-let chartInstance: echarts.ECharts | null = null;
 const isDark = ref(false);
 const transformEditorHeight = ref(120);
 const metricEditorHeight = ref(120);
+let chartInstance: echarts.ECharts | null = null;
+
 
 // Resize logic
 const startResize = (e: MouseEvent, type: 'transform' | 'metric') => {
@@ -202,7 +277,7 @@ const startResize = (e: MouseEvent, type: 'transform' | 'metric') => {
 };
 
 const isMultiValue = computed(() => {
-  return typeof props.value === 'object' && props.value !== null;
+  return typeof value.value === 'object' && value.value !== null;
 });
 
 const extensions = computed(() => {
@@ -224,7 +299,7 @@ const initChart = () => {
 };
 
 const updateChart = () => {
-  if (!chartInstance || !props.history || props.history.length === 0) return;
+  if (!chartInstance || !history.value || history.value.length === 0) return;
 
   const textColor = isDark.value ? '#a0a0a0' : '#666';
   const axisColor = isDark.value ? '#404040' : '#e0e0e0';
@@ -247,7 +322,7 @@ const updateChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: props.history.map(h => h.step),
+      data: history.value.map(h => h.step),
       axisLine: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor, fontSize: 10 }
     },
@@ -262,20 +337,20 @@ const updateChart = () => {
   if (isMultiValue.value) {
     // Multi-value: Stacked Bar
     // Get all keys from the current value prop
-    const keys = Object.keys(props.value as Record<string, number>);
+    const keys = Object.keys(value.value as Record<string, number>);
     
     (option.series as any[]) = keys.map(key => ({
       name: key,
       type: 'bar',
       stack: 'total',
-      data: props.history!.map(h => h[key] || 0),
+      data: history.value!.map(h => h[key] || 0),
       emphasis: { focus: 'series' }
     }));
   } else {
     // Single Value: Simple Bar
     (option.series as any[]) = [{
       type: 'bar',
-      data: props.history.map(h => h.value),
+      data: history.value.map(h => h.value),
       itemStyle: { color: '#1890ff' }
     }];
   }
@@ -319,7 +394,7 @@ watch(showTimeline, async (val) => {
   }
 });
 
-watch(() => props.history, () => {
+watch(() => history.value, () => {
   if (showTimeline.value && chartInstance) {
     updateChart();
   }

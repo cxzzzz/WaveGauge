@@ -39,11 +39,8 @@
             :is="child.type === 'group' ? 'AnalysisGroup' : Analysis" 
             :element="child"
             :name="child.name"
-            :value="child.value"
-            :history="child.history"
             v-model:metricCode="child.metricCode"
             v-model:transformCode="child.transformCode"
-            @run="(payload) => $emit('run', payload || child)"
           />
         </template>
       </draggable>
@@ -70,10 +67,6 @@ defineOptions({
 
 const props = defineProps<{
   element: any; // The group data object
-}>();
-
-defineEmits<{
-  (e: 'run', item: any): void;
 }>();
 
 const localCollapsed = ref(props.element.collapsed || false);

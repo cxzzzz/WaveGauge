@@ -5,6 +5,7 @@ from typing import Optional, Any, List, Dict
 import uvicorn
 import pandas as pd
 import numpy as np
+from asteval import Interpreter
 
 app = FastAPI()
 
@@ -30,12 +31,10 @@ def execute_transform(data: Any, code: str) -> Any:
     if not code.strip():
         return data
         
-    local_scope = {"data": data, "pd": pd, "np": np}
-    # We use exec to allow arbitrary python code including variable assignment
-    exec(code, {}, local_scope)
+    aeval = Interpreter(usersyms={"data": data, "pd": pd, "np": np})
+    aeval(code)
     
-    # We expect the user to either modify 'data' in place or assign new 'data' variable
-    return local_scope.get("data", data)
+    return aeval.symtable.get("data", data)
 
 def execute_metric(data: Any, code: str) -> Any:
     """
@@ -45,17 +44,22 @@ def execute_metric(data: Any, code: str) -> Any:
     if not code.strip():
         return 0
         
-    # Wrap code in a function to support 'return'
-    func_def = "def _metric_calc(data):\n"
-    # Indent user code
-    indented_code = "\n".join(["    " + line for line in code.splitlines()])
-    full_code = func_def + indented_code
-    
-    local_scope = {"pd": pd, "np": np}
-    exec(full_code, {}, local_scope)
-    
-    # Call the function
-    return local_scope["_metric_calc"](data)
+    aeval = Interpreter(usersyms={"data": data, "pd": pd, "np": np})
+    return aeval(code)
+
+def convert_numpy(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy(v) for v in obj]
+    else:
+        return obj
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
@@ -93,7 +97,7 @@ async def analyze(req: AnalyzeRequest):
         return {
             "status": "success",
             "data": table_data,
-            "metrics": metric_result
+            "metrics": convert_numpy(metric_result)
         }
         
     except Exception as e:
