@@ -15,88 +15,14 @@
     </div>
     
     <div class="max-w-[800px] mx-auto">
-      <div class="flex items-center gap-2 mb-2">
-        <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Waveform Path</span>
-        <a-input
-          v-model:value="wavePath"
-          size="small"
-          placeholder="Enter waveform file path"
-          class="!text-xs"
-        />
-      </div>
-      <AnalysisGroup 
-        :element="rootGroup" 
-        :is-root="true"
-        :wave-path="wavePath"
-        v-model:zoomStart="zoomStart"
-        v-model:zoomEnd="zoomEnd"
-      />
+      <WaveformTabs />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import AnalysisGroup from './components/AnalysisGroup.vue';
-
-const rootGroup = ref({
-  id: 'root',
-  type: 'group',
-  name: '',
-  collapsed: false,
-  children: [
-    {
-      id: 'g1',
-      type: 'group',
-      name: 'GPU Performance Analysis',
-      collapsed: false,
-      children: [
-        {
-          id: 'a1',
-          type: 'analysis',
-          name: 'Compute (SM) Throughput [%]',
-          metricCode: '# Calculate SM Throughput\n# Return a single value (0-1)\nnp.mean(data["sm_active"])',
-          transformCode: '# Load waveform\nsm = W(\'top.sm_active\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "sm_active": sm.value\n})',
-          chartType: 'line',
-          summaryType: 'avg',
-          maxValue: undefined
-        },
-        {
-          id: 'g2',
-          type: 'group',
-          name: 'Memory Subsystem',
-          collapsed: false,
-          children: [
-            {
-              id: 'a2',
-              type: 'analysis',
-              name: 'Memory Throughput [%]',
-              metricCode: '# Calculate Memory Throughput\n# Return a single value (0-1)\nnp.mean(data["dram_read"] + data["dram_write"]) / 100',
-              transformCode: '# Load waveforms\nwaves = WS([\'top.dram_read\', \'top.dram_write\'], clock=\'top.clk\')\nread = waves[0]\nwrite = waves[1]\ndata = pd.DataFrame({\n  "dram_read": read.value,\n  "dram_write": write.value\n})',
-              chartType: 'bar',
-              summaryType: 'avg',
-              maxValue: undefined
-            },
-            {
-              id: 'a3',
-              type: 'analysis',
-              name: 'L2 Cache Breakdown',
-              metricCode: '# Calculate L2 Cache Metrics\n{\n  "L2 Hit Rate": np.mean(data["l2_hit"]),\n  "L2 Throughput": 0.45,\n  "L2 Write Hit Rate": 0.92\n}',
-              transformCode: '# Load waveform\nl2 = W(\'top.l2_hit\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "l2_hit": l2.value\n})',
-              chartType: 'heatmap',
-              summaryType: 'avg',
-              maxValue: undefined
-            }
-          ]
-        }
-      ]
-    }
-  ]
-});
-
-const wavePath = ref('/home/cxzzzz/Programming/hardware/WaveGauge/backend/sample.vcd');
-const zoomStart = ref(0);
-const zoomEnd = ref(100);
+import WaveformTabs from './components/WaveformTabs.vue';
 const isDarkMode = ref(true);
 
 const toggleTheme = (checked: boolean) => {
