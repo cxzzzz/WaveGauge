@@ -132,16 +132,29 @@
 
     <!-- Body: Logic Editor (Collapsible) -->
     <div v-if="expanded" class="p-2 bg-white dark:bg-[#1f1f1f] border-t border-gray-200 dark:border-[#303030] transition-colors duration-300">
-      <div class="mb-2 flex items-center gap-2">
-        <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          Chart Type
+      <div class="mb-2 flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            Chart Type
+          </div>
+          <a-select
+            v-model:value="chartTypeModel"
+            size="small"
+            class="!text-xs w-[160px]"
+            :options="chartTypeOptions"
+          />
         </div>
-        <a-select
-          v-model:value="chartTypeModel"
-          size="small"
-          class="!text-xs w-[160px]"
-          :options="chartTypeOptions"
-        />
+        <div class="flex items-center gap-2">
+          <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            Data Summary
+          </div>
+          <a-select
+            v-model:value="summaryTypeModel"
+            size="small"
+            class="!text-xs w-[140px]"
+            :options="summaryTypeOptions"
+          />
+        </div>
       </div>
 
       <!-- Transform Logic Editor -->
@@ -163,33 +176,7 @@
           <!-- Resize Handle -->
           <div 
             class="h-1.5 bg-gray-100 dark:bg-[#2a2a2a] cursor-row-resize hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors flex justify-center items-center"
-            @mousedown.prevent="startResize($event, 'transform')"
-          >
-             <div class="w-8 h-0.5 bg-gray-300 dark:bg-[#404040] rounded-full"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Metric Calculation Editor -->
-      <div class="mb-2">
-        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">
-          Metric Evaluation Logic
-        </div>
-        <div class="border border-gray-200 dark:border-[#303030] rounded-sm overflow-hidden flex flex-col">
-          <Codemirror
-            :model-value="metricCode"
-            @update:model-value="$emit('update:metricCode', $event)"
-            placeholder="# Enter logic to calculate overall metric value..."
-            :style="{ height: metricEditorHeight + 'px' }"
-            :autofocus="false"
-            :indent-with-tab="true"
-            :tab-size="4"
-            :extensions="extensions"
-          />
-          <!-- Resize Handle -->
-          <div 
-            class="h-1.5 bg-gray-100 dark:bg-[#2a2a2a] cursor-row-resize hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors flex justify-center items-center"
-            @mousedown.prevent="startResize($event, 'metric')"
+            @mousedown.prevent="startResize($event)"
           >
              <div class="w-8 h-0.5 bg-gray-300 dark:bg-[#404040] rounded-full"></div>
           </div>
@@ -238,6 +225,7 @@ const props = defineProps<{
   zoomStart?: number;
   zoomEnd?: number;
   chartType?: string;
+  summaryType?: string;
 }>();
 
 const emit = defineEmits<{
@@ -245,11 +233,12 @@ const emit = defineEmits<{
   (e: 'update:transformCode', val: string): void;
   (e: 'update:name', val: string): void;
   (e: 'update:description', val: string): void;
-  (e: 'update:result', val: number | Record<string, number>): void;
+  (e: 'update:result', val: number | Record<string, number> | undefined): void;
   (e: 'update:history', val: Array<{ step: string | number; [key: string]: any }>): void;
   (e: 'update:zoomStart', val: number): void;
   (e: 'update:zoomEnd', val: number): void;
   (e: 'update:chartType', val: string): void;
+  (e: 'update:summaryType', val: string): void;
   (e: 'delete'): void;
 }>();
 
@@ -264,9 +253,19 @@ const chartTypeOptions = [
   { label: 'Stacked Line', value: 'stacked_line' },
   { label: 'Heatmap', value: 'heatmap' }
 ];
+const summaryTypeOptions = [
+  { label: 'Average', value: 'avg' },
+  { label: 'Maximum', value: 'max' },
+  { label: 'Minimum', value: 'min' },
+  { label: 'Sum', value: 'sum' }
+];
 const chartTypeModel = computed({
   get: () => props.chartType ?? 'line',
   set: (val: string) => emit('update:chartType', val)
+});
+const summaryTypeModel = computed({
+  get: () => props.summaryType ?? 'avg',
+  set: (val: string) => emit('update:summaryType', val)
 });
 
 const hasResult = computed(() => props.result !== undefined);
@@ -313,17 +312,13 @@ const runAnalysis = async () => {
   try {
     const response = await axios.post(`${API_URL}/analyze`, {
       file_path: props.wavePath,
-      transform_code: props.transformCode,
-      metric_code: props.metricCode
+      transform_code: props.transformCode
     });
 
     if (response.data.status === 'success') {
       message.destroy();
       message.success(`Analysis for ${props.name} completed!`);
       errorMessage.value = '';
-      
-      // Update value
-      emit('update:result', response.data.metrics);
       
       // Update history/table data
       if (response.data.data && response.data.data.length > 0) {
@@ -398,23 +393,18 @@ const chartRef = ref<HTMLElement | null>(null);
 const isDark = ref(false);
 const isSettingZoom = ref(false);
 const transformEditorHeight = ref(120);
-const metricEditorHeight = ref(120);
 let chartInstance: echarts.ECharts | null = null;
 
 
 // Resize logic
-const startResize = (e: MouseEvent, type: 'transform' | 'metric') => {
+const startResize = (e: MouseEvent) => {
   const startY = e.clientY;
-  const startHeight = type === 'transform' ? transformEditorHeight.value : metricEditorHeight.value;
+  const startHeight = transformEditorHeight.value;
 
   const onMouseMove = (ev: MouseEvent) => {
     const delta = ev.clientY - startY;
     const newHeight = Math.max(50, startHeight + delta); // Min height 50px
-    if (type === 'transform') {
-      transformEditorHeight.value = newHeight;
-    } else {
-      metricEditorHeight.value = newHeight;
-    }
+    transformEditorHeight.value = newHeight;
   };
 
   const onMouseUp = () => {
@@ -441,6 +431,74 @@ const getProgressColor = (val: number) => {
   if (val < 0.8) return '#faad14'; // Yellow
   return '#ff4d4f'; // Red
 };
+
+const calculateSummary = (
+  history: Array<{ step: string | number; [key: string]: any }>,
+  summaryType: string
+): number | Record<string, number> | undefined => {
+  if (!history.length) return undefined;
+  const keys = Object.keys(history[0] ?? {}).filter(k => k !== 'step');
+  if (!keys.length) return undefined;
+
+  const summarize = (values: number[]): number | undefined => {
+    if (!values.length) return undefined;
+    if (summaryType === 'max') return Math.max(...values);
+    if (summaryType === 'min') return Math.min(...values);
+    if (summaryType === 'sum') return values.reduce((acc, val) => acc + val, 0);
+    const total = values.reduce((acc, val) => acc + val, 0);
+    return total / values.length;
+  };
+
+  const result: Record<string, number> = {};
+  keys.forEach((key) => {
+    const values = history
+      .map(item => Number(item[key]))
+      .filter(val => Number.isFinite(val));
+    const summaryValue = summarize(values);
+    if (summaryValue !== undefined) {
+      result[key] = summaryValue;
+    }
+  });
+
+  if (keys.length === 1) {
+    const singleKey = keys[0];
+    if (!singleKey) return undefined;
+    return result[singleKey];
+  }
+
+  return Object.keys(result).length ? result : undefined;
+};
+
+const getVisibleHistory = () => {
+  const history = historyData.value;
+  const length = history.length;
+  if (!length) return [];
+  const zoomStart = props.zoomStart ?? 0;
+  const zoomEnd = props.zoomEnd ?? 100;
+  const startIndex = Math.max(
+    0,
+    Math.min(length - 1, Math.floor((zoomStart / 100) * (length - 1)))
+  );
+  const endIndex = Math.max(
+    startIndex,
+    Math.min(length - 1, Math.ceil((zoomEnd / 100) * (length - 1)))
+  );
+  return history.slice(startIndex, endIndex + 1);
+};
+
+const updateSummaryResult = () => {
+  const summaryType = props.summaryType ?? 'avg';
+  const summary = calculateSummary(getVisibleHistory(), summaryType);
+  emit('update:result', summary);
+};
+
+watch(
+  [historyData, () => props.summaryType, () => props.zoomStart, () => props.zoomEnd],
+  () => {
+    updateSummaryResult();
+  },
+  { deep: true, immediate: true }
+);
 
 // Initialize Chart
 const initChart = () => {

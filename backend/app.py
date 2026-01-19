@@ -31,7 +31,6 @@ app.add_middleware(
 class AnalyzeRequest(BaseModel):
     file_path: str
     transform_code: str = ""
-    metric_code: str = ""
 
 
 def get_reader_class(file_path: str) -> type:
@@ -82,39 +81,12 @@ def execute_transform(reader: Any, code: str, data: Any = None) -> Any:
     return aeval.symtable.get("data", data)
 
 
-def execute_metric(reader: Any, data: Any, code: str) -> Any:
-    if not code.strip():
-        return 0
-
-    aeval = build_interpreter(reader, data)
-    result = aeval(code)
-    if aeval.error:
-        raise RuntimeError(format_asteval_error(aeval))
-    return result
-
-
-def convert_numpy(obj):
-    if isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, dict):
-        return {k: convert_numpy(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_numpy(v) for v in obj]
-    else:
-        return obj
-
-
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
     try:
         reader_class = get_reader_class(req.file_path)
         with reader_class(req.file_path) as reader:
             processed_data = execute_transform(reader, req.transform_code)
-            metric_result = execute_metric(reader, processed_data, req.metric_code)
 
         if isinstance(processed_data, pd.DataFrame):
             table_data = processed_data.reset_index().to_dict(orient="records")
@@ -126,7 +98,6 @@ async def analyze(req: AnalyzeRequest):
         return {
             "status": "success",
             "data": table_data,
-            "metrics": convert_numpy(metric_result),
         }
 
     except Exception as e:

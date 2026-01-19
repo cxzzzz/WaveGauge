@@ -57,7 +57,8 @@ const rootGroup = ref({
           name: 'Compute (SM) Throughput [%]',
           metricCode: '# Calculate SM Throughput\n# Return a single value (0-1)\nnp.mean(data["sm_active"])',
           transformCode: '# Load waveform\nsm = W(\'top.sm_active\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "timestamp": np.arange(len(sm.value)),\n  "sm_active": sm.value\n})',
-          chartType: 'line'
+          chartType: 'line',
+          summaryType: 'avg'
         },
         {
           id: 'g2',
@@ -71,7 +72,8 @@ const rootGroup = ref({
               name: 'Memory Throughput [%]',
               metricCode: '# Calculate Memory Throughput\n# Return a single value (0-1)\nnp.mean(data["dram_read"] + data["dram_write"]) / 100',
               transformCode: '# Load waveforms\nwaves = WS([\'top.dram_read\', \'top.dram_write\'], clock=\'top.clk\')\nread = waves[0]\nwrite = waves[1]\ndata = pd.DataFrame({\n  "timestamp": np.arange(len(read.value)),\n  "dram_read": read.value,\n  "dram_write": write.value\n})',
-              chartType: 'bar'
+              chartType: 'bar',
+              summaryType: 'avg'
             },
             {
               id: 'a3',
@@ -79,7 +81,8 @@ const rootGroup = ref({
               name: 'L2 Cache Breakdown',
               metricCode: '# Calculate L2 Cache Metrics\n{\n  "L2 Hit Rate": np.mean(data["l2_hit"]),\n  "L2 Throughput": 0.45,\n  "L2 Write Hit Rate": 0.92\n}',
               transformCode: '# Load waveform\nl2 = W(\'top.l2_hit\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "timestamp": np.arange(len(l2.value)),\n  "l2_hit": l2.value\n})',
-              chartType: 'heatmap'
+              chartType: 'heatmap',
+              summaryType: 'avg'
             }
           ]
         }

@@ -105,6 +105,7 @@
             v-model:zoomStart="zoomStartModel"
             v-model:zoomEnd="zoomEndModel"
             v-model:chartType="child.chartType"
+            v-model:summaryType="child.summaryType"
             v-model:name="child.name"
             v-model:description="child.description"
             v-model:metricCode="child.metricCode"
@@ -207,7 +208,8 @@ const addAnalysis = () => {
     description: '',
     metricCode: '# Calculate metric\n# Return a value\nreturn 0',
     transformCode: '# Transform data\n# data = ...',
-    chartType: 'line'
+    chartType: 'line',
+    summaryType: 'avg'
   });
   // Auto expand if collapsed
   if (localCollapsed.value) toggleCollapse();
