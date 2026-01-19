@@ -104,9 +104,12 @@
       </div>
     </div>
 
-    <!-- Timeline Section (Collapsible) -->
+    <div v-if="errorMessage" class="px-1.5 py-1 text-xs text-red-600 bg-red-50 dark:bg-[#2a1f1f] dark:text-red-300 border-t border-red-100 dark:border-[#3a2a2a]">
+      {{ errorMessage }}
+    </div>
+
     <div v-if="showTimeline" class="p-1.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
-      <div ref="chartRef" class="w-full h-[150px]"></div>
+      <div ref="chartRef" class="w-full aspect-[16/5]"></div>
     </div>
 
     <!-- Multi-Value List -->
@@ -129,7 +132,18 @@
 
     <!-- Body: Logic Editor (Collapsible) -->
     <div v-if="expanded" class="p-2 bg-white dark:bg-[#1f1f1f] border-t border-gray-200 dark:border-[#303030] transition-colors duration-300">
-      
+      <div class="mb-2 flex items-center gap-2">
+        <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          Chart Type
+        </div>
+        <a-select
+          v-model:value="chartTypeModel"
+          size="small"
+          class="!text-xs w-[160px]"
+          :options="chartTypeOptions"
+        />
+      </div>
+
       <!-- Transform Logic Editor -->
       <div class="mb-2">
         <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-0.5 uppercase tracking-wider">
@@ -221,6 +235,9 @@ const props = defineProps<{
   result?: number | Record<string, number>;
   history?: Array<{ step: string | number; [key: string]: any }>;
   wavePath?: string;
+  zoomStart?: number;
+  zoomEnd?: number;
+  chartType?: string;
 }>();
 
 const emit = defineEmits<{
@@ -230,12 +247,27 @@ const emit = defineEmits<{
   (e: 'update:description', val: string): void;
   (e: 'update:result', val: number | Record<string, number>): void;
   (e: 'update:history', val: Array<{ step: string | number; [key: string]: any }>): void;
+  (e: 'update:zoomStart', val: number): void;
+  (e: 'update:zoomEnd', val: number): void;
+  (e: 'update:chartType', val: string): void;
   (e: 'delete'): void;
 }>();
 
 const isEditingName = ref(false);
 const localName = ref(props.name);
 const nameInput = ref<HTMLInputElement | null>(null);
+const errorMessage = ref('');
+const chartTypeOptions = [
+  { label: 'Bar', value: 'bar' },
+  { label: 'Stacked Bar', value: 'stacked_bar' },
+  { label: 'Line', value: 'line' },
+  { label: 'Stacked Line', value: 'stacked_line' },
+  { label: 'Heatmap', value: 'heatmap' }
+];
+const chartTypeModel = computed({
+  get: () => props.chartType ?? 'line',
+  set: (val: string) => emit('update:chartType', val)
+});
 
 const hasResult = computed(() => props.result !== undefined);
 const value = computed(() => props.result ?? 0);
@@ -271,6 +303,7 @@ const saveName = () => {
 };
 
 const runAnalysis = async () => {
+  errorMessage.value = '';
   if (!props.wavePath?.trim()) {
     message.error('Waveform path is required');
     return;
@@ -287,6 +320,7 @@ const runAnalysis = async () => {
     if (response.data.status === 'success') {
       message.destroy();
       message.success(`Analysis for ${props.name} completed!`);
+      errorMessage.value = '';
       
       // Update value
       emit('update:result', response.data.metrics);
@@ -338,11 +372,19 @@ const runAnalysis = async () => {
       
     } else {
       message.destroy();
-      message.error(`Error: ${response.data.error}`);
+      const backendError = response.data?.error ?? 'Unknown error';
+      errorMessage.value = String(backendError);
+      message.error(`Error: ${backendError}`);
     }
   } catch (error: any) {
     message.destroy();
-    message.error(`Request failed: ${error.message}`);
+    const backendError =
+      error?.response?.data?.detail ??
+      error?.response?.data?.error ??
+      error?.message ??
+      'Unknown error';
+    errorMessage.value = String(backendError);
+    message.error(`Request failed: ${backendError}`);
   }
 };
 
@@ -354,6 +396,7 @@ const expanded = ref(false);
 const showTimeline = ref(false);
 const chartRef = ref<HTMLElement | null>(null);
 const isDark = ref(false);
+const isSettingZoom = ref(false);
 const transformEditorHeight = ref(120);
 const metricEditorHeight = ref(120);
 let chartInstance: echarts.ECharts | null = null;
@@ -403,6 +446,7 @@ const getProgressColor = (val: number) => {
 const initChart = () => {
   if (chartRef.value) {
     chartInstance = echarts.init(chartRef.value);
+    chartInstance.on('datazoom', handleDataZoom);
     updateChart();
   }
 };
@@ -412,14 +456,19 @@ const updateChart = () => {
 
   const textColor = isDark.value ? '#a0a0a0' : '#666';
   const axisColor = isDark.value ? '#404040' : '#e0e0e0';
+  const zoomStart = props.zoomStart ?? 0;
+  const zoomEnd = props.zoomEnd ?? 100;
+  const chartType = props.chartType ?? 'line';
+  const steps = historyData.value.map(item => String(item.step));
+  const keys = Object.keys(historyData.value[0] ?? {}).filter(k => k !== 'step');
 
   const option: echarts.EChartsOption = {
     backgroundColor: 'transparent',
     grid: {
-      top: 10,
-      bottom: 20,
-      left: 10,
-      right: 10,
+      top: '6%',
+      bottom: '20%',
+      left: '6%',
+      right: '6%',
       containLabel: true
     },
     tooltip: {
@@ -433,7 +482,7 @@ const updateChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: historyData.value.map(item => item.step),
+      data: steps,
       axisLine: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor }
     },
@@ -443,23 +492,111 @@ const updateChart = () => {
       axisLabel: { color: textColor },
       splitLine: { lineStyle: { color: isDark.value ? '#333' : '#eee' } }
     },
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: 0,
+        start: zoomStart,
+        end: zoomEnd
+      },
+      {
+        type: 'slider',
+        xAxisIndex: 0,
+        height: '10%',
+        bottom: '2%',
+        start: zoomStart,
+        end: zoomEnd
+      }
+    ],
     series: []
   };
 
-  const keys = Object.keys(historyData.value[0] ?? {}).filter(k => k !== 'step');
-  const series = keys.map(key => ({
-    name: key,
-    data: historyData.value.map(item => item[key]),
-    type: 'line',
-    smooth: true,
-    showSymbol: false,
-    areaStyle: {
-      opacity: 0.1
-    }
-  }));
-  option.series = series as echarts.SeriesOption[];
+  if (chartType === 'heatmap') {
+    const yCategories = keys;
+    const heatmapData: Array<[number, number, number]> = [];
+    let maxValue = 0;
+    yCategories.forEach((key, yIndex) => {
+      historyData.value.forEach((item, xIndex) => {
+        const rawValue = Number(item[key] ?? 0);
+        const value = Number.isFinite(rawValue) ? rawValue : 0;
+        maxValue = Math.max(maxValue, value);
+        heatmapData.push([xIndex, yIndex, value]);
+      });
+    });
+    option.xAxis = {
+      type: 'category',
+      data: steps,
+      axisLine: { lineStyle: { color: axisColor } },
+      axisLabel: { color: textColor }
+    };
+    option.yAxis = {
+      type: 'category',
+      data: yCategories,
+      axisLine: { lineStyle: { color: axisColor } },
+      axisLabel: { color: textColor }
+    };
+    option.visualMap = {
+      min: 0,
+      max: Math.max(1, maxValue),
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      top: 0,
+      textStyle: { color: textColor }
+    };
+    option.series = [
+      {
+        type: 'heatmap',
+        data: heatmapData,
+        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.2)' } }
+      }
+    ] as echarts.SeriesOption[];
+  } else {
+    const isStacked = chartType === 'stacked_bar' || chartType === 'stacked_line';
+    const seriesType = chartType.includes('bar') ? 'bar' : 'line';
+    const series = keys.map(key => {
+      const data = historyData.value.map(item => item[key]);
+      if (seriesType === 'line') {
+        const lineItem: echarts.LineSeriesOption = {
+          name: key,
+          data,
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          areaStyle: { opacity: 0.1 }
+        };
+        if (isStacked) {
+          lineItem.stack = 'total';
+        }
+        return lineItem;
+      }
+      const barItem: echarts.BarSeriesOption = {
+        name: key,
+        data,
+        type: 'bar'
+      };
+      if (isStacked) {
+        barItem.stack = 'total';
+      }
+      return barItem;
+    });
+    option.series = series as echarts.SeriesOption[];
+  }
 
+  isSettingZoom.value = true;
   chartInstance.setOption(option);
+  setTimeout(() => {
+    isSettingZoom.value = false;
+  }, 0);
+};
+
+const handleDataZoom = (event: any) => {
+  if (isSettingZoom.value) return;
+  const payload = event?.batch?.[0] ?? event ?? {};
+  const start = typeof payload.start === 'number' ? payload.start : props.zoomStart ?? 0;
+  const end = typeof payload.end === 'number' ? payload.end : props.zoomEnd ?? 100;
+  emit('update:zoomStart', start);
+  emit('update:zoomEnd', end);
 };
 
 // Watch theme changes
@@ -503,6 +640,12 @@ watch(() => props.history, () => {
     updateChart();
   }
 }, { deep: true });
+
+watch([() => props.zoomStart, () => props.zoomEnd, () => props.chartType], () => {
+  if (showTimeline.value && chartInstance) {
+    updateChart();
+  }
+});
 
 // Handle Resize
 const handleResize = () => {

@@ -102,6 +102,9 @@
             :element="child"
             :wave-path="wavePath"
             :ref="(el: any) => setChildRef(el, child.id)"
+            v-model:zoomStart="zoomStartModel"
+            v-model:zoomEnd="zoomEndModel"
+            v-model:chartType="child.chartType"
             v-model:name="child.name"
             v-model:description="child.description"
             v-model:metricCode="child.metricCode"
@@ -117,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { 
   DownOutlined, 
   RightOutlined, 
@@ -147,10 +150,14 @@ const props = defineProps<{
   element: any; // The group data object
   isRoot?: boolean;
   wavePath?: string;
+  zoomStart?: number;
+  zoomEnd?: number;
 }>();
 
 const emit = defineEmits<{
   (e: 'delete'): void;
+  (e: 'update:zoomStart', val: number): void;
+  (e: 'update:zoomEnd', val: number): void;
 }>();
 
 const localCollapsed = ref(props.element.collapsed || false);
@@ -158,6 +165,14 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const isEditingName = ref(false);
 const nameInput = ref<any>(null);
 const childRefs = ref(new Map<string, any>());
+const zoomStartModel = computed({
+  get: () => props.zoomStart ?? 0,
+  set: (val: number) => emit('update:zoomStart', val)
+});
+const zoomEndModel = computed({
+  get: () => props.zoomEnd ?? 100,
+  set: (val: number) => emit('update:zoomEnd', val)
+});
 
 const startEditing = () => {
   isEditingName.value = true;
@@ -191,7 +206,8 @@ const addAnalysis = () => {
     name: 'New Analysis',
     description: '',
     metricCode: '# Calculate metric\n# Return a value\nreturn 0',
-    transformCode: '# Transform data\n# data = ...'
+    transformCode: '# Transform data\n# data = ...',
+    chartType: 'line'
   });
   // Auto expand if collapsed
   if (localCollapsed.value) toggleCollapse();
