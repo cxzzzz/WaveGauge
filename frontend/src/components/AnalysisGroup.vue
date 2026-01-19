@@ -1,11 +1,11 @@
 <template>
-  <div class="border border-gray-300 dark:border-[#444] rounded-sm mb-2 overflow-hidden shadow-sm bg-white dark:bg-[#1f1f1f]">
+  <div class="border border-gray-300 dark:border-[#444] rounded-sm mb-1 overflow-hidden shadow-sm bg-white dark:bg-[#1f1f1f]">
     <!-- Group Header -->
     <div 
-      class="flex justify-between items-center px-2 py-1.5 bg-gray-200 dark:bg-[#2d2d2d] cursor-pointer hover:bg-gray-300 dark:hover:bg-[#383838] transition-colors select-none group-header"
+      class="flex justify-between items-center px-1.5 py-1 bg-gray-200 dark:bg-[#2d2d2d] cursor-pointer hover:bg-gray-300 dark:hover:bg-[#383838] transition-colors select-none group-header"
       @click="toggleCollapse"
     >
-      <div class="flex items-center gap-1.5">
+      <div class="flex items-center gap-1">
         <!-- Drag Handle Icon -->
         <holder-outlined v-if="!isRoot" class="cursor-move text-gray-400 dark:text-[#666] hover:text-gray-600 dark:hover:text-[#aaa]" />
         
@@ -27,16 +27,16 @@
           v-else 
           @click.stop
           @dblclick.stop="startEditing" 
-          class="font-bold text-sm text-gray-800 dark:text-[#f0f0f0] truncate"
+          class="font-bold text-xs text-gray-800 dark:text-[#f0f0f0] truncate"
         >
           {{ element.name }}
         </span>
         <edit-outlined v-if="!isEditingName" class="text-xs text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity ml-1" @click.stop="startEditing" />
       </div>
       
-      <div class="flex items-center gap-2" @click.stop>
+      <div class="flex items-center gap-1.5" @click.stop>
         <a-dropdown trigger="click">
-          <a-button type="text" size="small" class="!text-gray-500 hover:!text-gray-800 dark:!text-[#aaa] dark:hover:!text-white !h-6 !px-1">
+          <a-button type="text" size="small" class="inline-flex items-center justify-center !text-gray-500 hover:!text-gray-800 dark:!text-[#aaa] dark:hover:!text-white !h-5 !w-5 !px-0 !leading-none">
             <template #icon><more-outlined /></template>
           </a-button>
           <template #overlay>
@@ -46,6 +46,9 @@
               </a-menu-item>
               <a-menu-item key="add-group" @click="addGroup">
                 <folder-add-outlined /> Add Group
+              </a-menu-item>
+              <a-menu-item key="run-all" @click="runAllAnalyses">
+                <play-circle-outlined /> Run All Analyses
               </a-menu-item>
               <a-menu-divider />
               <a-menu-item key="export" @click="exportGroup">
@@ -91,13 +94,13 @@
         ghost-class="ghost"
         drag-class="drag"
         handle=".group-header, .analysis-header"
-        class="p-1.5 flex flex-col gap-1 min-h-[30px]"
+        class="p-1 flex flex-col gap-0.5 min-h-[24px]"
       >
         <template #item="{ element: child, index }">
           <component 
             :is="child.type === 'group' ? 'AnalysisGroup' : Analysis" 
             :element="child"
-            :name="child.name"
+            :ref="(el: any) => setChildRef(el, child.id)"
             v-model:name="child.name"
             v-model:description="child.description"
             v-model:metricCode="child.metricCode"
@@ -126,7 +129,8 @@ import {
   DownloadOutlined, 
   UploadOutlined, 
   DeleteOutlined,
-  EditOutlined
+  EditOutlined,
+  PlayCircleOutlined
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import draggable from 'vuedraggable';
@@ -151,6 +155,7 @@ const localCollapsed = ref(props.element.collapsed || false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const isEditingName = ref(false);
 const nameInput = ref<any>(null);
+const childRefs = ref(new Map<string, any>());
 
 const startEditing = () => {
   isEditingName.value = true;
@@ -200,6 +205,30 @@ const addGroup = () => {
   });
   if (localCollapsed.value) toggleCollapse();
 };
+
+const setChildRef = (el: any, id: string) => {
+  if (!id) return;
+  if (el) {
+    childRefs.value.set(id, el);
+  } else {
+    childRefs.value.delete(id);
+  }
+};
+
+const runAllAnalyses = async () => {
+  for (const child of props.element.children) {
+    const refInstance = childRefs.value.get(child.id);
+    if (child.type === 'group') {
+      await refInstance?.runAllAnalyses?.();
+    } else if (child.type === 'analysis') {
+      await refInstance?.runAnalysis?.();
+    }
+  }
+};
+
+defineExpose({
+  runAllAnalyses
+});
 
 const cleanExportData = (data: any): any => {
   if (Array.isArray(data)) {

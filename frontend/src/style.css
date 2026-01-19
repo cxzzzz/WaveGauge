@@ -1,3 +1,15 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+.anticon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.anticon > svg {
+  display: block;
+  line-height: 1;
+}

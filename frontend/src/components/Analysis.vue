@@ -1,8 +1,8 @@
 <template>
   <div class="bg-white dark:bg-[#1f1f1f] border border-gray-200 dark:border-[#303030] rounded-sm mb-1 overflow-hidden transition-colors duration-300">
     <!-- Header: Metric Name & Value -->
-    <div class="flex justify-between items-center px-2 py-1.5 bg-gray-50 dark:bg-[#141414] transition-colors duration-300 analysis-header cursor-pointer hover:bg-gray-100 dark:hover:bg-[#1a1a1a]">
-      <div class="flex items-center gap-1.5 font-medium text-gray-900 dark:text-[#e0e0e0] text-sm flex-1 mr-2">
+    <div class="flex justify-between items-center px-1.5 py-1 bg-gray-50 dark:bg-[#141414] transition-colors duration-300 analysis-header cursor-pointer hover:bg-gray-100 dark:hover:bg-[#1a1a1a]">
+      <div class="flex items-center gap-1 font-medium text-gray-900 dark:text-[#e0e0e0] text-xs flex-1 mr-1.5">
         <!-- Drag Handle -->
         <holder-outlined class="cursor-move text-gray-400 dark:text-[#666] hover:text-gray-600 dark:hover:text-[#aaa]" />
         
@@ -24,19 +24,31 @@
       <div class="flex items-center gap-2">
         <!-- Single Value Mode -->
         <template v-if="!isMultiValue">
-          <div class="w-[70px]">
+          <div class="w-[64px]">
             <a-progress 
-              :percent="Math.min(Math.max(Number(value) * 100, 0), 100)" 
-              :stroke-color="getProgressColor(Number(value))"
+              :percent="displayPercent"
+              :stroke-color="displayColor"
               :show-info="false"
               size="small" 
             />
           </div>
-          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ (Number(value) * 100).toFixed(1) }}%</span>
+          <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ displayText }}</span>
         </template>
         
         <!-- Toggle Buttons -->
-        <div class="flex gap-1" @click.stop>
+        <div class="flex gap-0.5" @click.stop>
+          <!-- Timeline Toggle -->
+          <a-button 
+            type="text" 
+            size="small" 
+            class="inline-flex items-center justify-center !text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-5 !w-5 !px-0 !leading-none"
+            @click="showTimeline = !showTimeline"
+          >
+            <template #icon>
+              <bar-chart-outlined />
+            </template>
+          </a-button>
+
           <!-- Info/Description Toggle -->
           <a-popover trigger="click" placement="bottomRight">
             <template #content>
@@ -54,7 +66,7 @@
             <a-button 
               type="text" 
               size="small" 
-              class="!text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-6 !px-1"
+              class="inline-flex items-center justify-center !text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-5 !w-5 !px-0 !leading-none"
             >
               <template #icon>
                 <info-circle-outlined />
@@ -62,24 +74,12 @@
             </a-button>
           </a-popover>
 
-          <!-- Timeline Toggle -->
-          <a-button 
-            type="text" 
-            size="small" 
-            class="!text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-6 !px-1"
-            @click="showTimeline = !showTimeline"
-          >
-            <template #icon>
-              <bar-chart-outlined />
-            </template>
-          </a-button>
-
           <!-- Dropdown Menu -->
           <a-dropdown trigger="click" placement="bottomRight">
             <a-button 
               type="text" 
               size="small" 
-              class="!text-gray-500 hover:!text-gray-800 dark:!text-[#aaa] dark:hover:!text-white !h-6 !px-1"
+              class="inline-flex items-center justify-center !text-gray-500 hover:!text-gray-800 dark:!text-[#aaa] dark:hover:!text-white !h-5 !w-5 !px-0 !leading-none"
             >
               <template #icon><more-outlined /></template>
             </a-button>
@@ -105,16 +105,16 @@
     </div>
 
     <!-- Timeline Section (Collapsible) -->
-    <div v-if="showTimeline" class="p-2 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
+    <div v-if="showTimeline" class="p-1.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
       <div ref="chartRef" class="w-full h-[150px]"></div>
     </div>
 
     <!-- Multi-Value List -->
-    <div v-if="isMultiValue" class="px-2 py-1 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
+    <div v-if="isMultiValue" class="px-1.5 py-0.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
       <div v-for="(val, key) in (value as Record<string, number>)" :key="key" class="flex justify-between items-center py-0.5">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ key }}</span>
         <div class="flex items-center gap-2">
-          <div class="w-[70px]">
+          <div class="w-[64px]">
              <a-progress 
               :percent="Math.min(Math.max(Number(val) * 100, 0), 100)" 
               :stroke-color="getProgressColor(Number(val))"
@@ -236,7 +236,20 @@ const isEditingName = ref(false);
 const localName = ref(props.name);
 const nameInput = ref<HTMLInputElement | null>(null);
 
+const hasResult = computed(() => props.result !== undefined);
 const value = computed(() => props.result ?? 0);
+const displayPercent = computed(() => {
+  if (!hasResult.value) return 0;
+  return Math.min(Math.max(Number(value.value) * 100, 0), 100);
+});
+const displayColor = computed(() => {
+  if (!hasResult.value) return '#d1d5db';
+  return getProgressColor(Number(value.value));
+});
+const displayText = computed(() => {
+  if (!hasResult.value) return '--';
+  return `${(Number(value.value) * 100).toFixed(1)}%`;
+});
 const historyData = computed(() => props.history ?? []);
 
 watch(() => props.name, (val) => {
@@ -327,6 +340,10 @@ const runAnalysis = async () => {
     message.error(`Request failed: ${error.message}`);
   }
 };
+
+defineExpose({
+  runAnalysis
+});
 
 const expanded = ref(false);
 const showTimeline = ref(false);
@@ -424,21 +441,18 @@ const updateChart = () => {
     series: []
   };
 
-  // Dynamically generate series based on keys in historyData
-  const keys = Object.keys(historyData.value[0]).filter(k => k !== 'step');
-  
-  keys.forEach(key => {
-    option.series!.push({
-      name: key,
-      data: historyData.value.map(item => item[key]),
-      type: 'line',
-      smooth: true,
-      showSymbol: false,
-      areaStyle: {
-        opacity: 0.1
-      }
-    });
-  });
+  const keys = Object.keys(historyData.value[0] ?? {}).filter(k => k !== 'step');
+  const series = keys.map(key => ({
+    name: key,
+    data: historyData.value.map(item => item[key]),
+    type: 'line',
+    smooth: true,
+    showSymbol: false,
+    areaStyle: {
+      opacity: 0.1
+    }
+  }));
+  option.series = series as echarts.SeriesOption[];
 
   chartInstance.setOption(option);
 };

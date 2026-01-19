@@ -27,7 +27,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import AnalysisGroup from './components/AnalysisGroup.vue';
-import { v4 as uuidv4 } from 'uuid';
 
 const rootGroup = ref({
   id: 'root',
