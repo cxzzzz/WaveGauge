@@ -1,11 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Any, List, Dict
+from typing import Any
+from pathlib import Path
+import logging
 import uvicorn
 import pandas as pd
 import numpy as np
 from asteval import Interpreter
+
+try:
+    from wavekit import VcdReader, FsdbReader
+except ImportError:
+    from wavekit import VcdReader
+
+    FsdbReader = None
 
 app = FastAPI()
 
@@ -18,34 +27,71 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class AnalyzeRequest(BaseModel):
     file_path: str
-    transform_code: Optional[str] = ""
-    metric_code: Optional[str] = ""
+    transform_code: str = ""
+    metric_code: str = ""
 
-def execute_transform(data: Any, code: str) -> Any:
-    """
-    Execute transform logic.
-    Expected to modify 'data' or return new 'data'.
-    """
+
+def get_reader_class(file_path: str) -> type:
+    suffix = Path(file_path).suffix.lower()
+    if suffix == ".vcd":
+        return VcdReader
+    if suffix == ".fsdb":
+        if FsdbReader is None:
+            raise ValueError("FsdbReader is not available in current wavekit build")
+        return FsdbReader
+    raise ValueError(f"Unsupported waveform file type: {suffix or 'unknown'}")
+
+
+def build_interpreter(reader: Any, data: Any) -> Interpreter:
+    def load_wave(path: str, **kwargs: Any) -> Any:
+        return reader.load_wave(path, **kwargs)
+
+    def load_waves(paths: Any, **kwargs: Any) -> Any:
+        if "clock" in kwargs:
+            clock = kwargs.pop("clock")
+            return [reader.load_wave(path, clock=clock, **kwargs) for path in paths]
+        return reader.load_waves(paths, **kwargs)
+
+    return Interpreter(
+        usersyms={"data": data, "pd": pd, "np": np, "W": load_wave, "WS": load_waves}
+    )
+
+
+def format_asteval_error(aeval: Interpreter) -> str:
+    error_msg = aeval.error_msg
+    if isinstance(error_msg, str) and error_msg:
+        return error_msg
+    if error_msg:
+        return "\n".join(error_msg)
+    if aeval.error:
+        return "\n".join(str(err) for err in aeval.error)
+    return "Unknown error"
+
+
+def execute_transform(reader: Any, code: str, data: Any = None) -> Any:
     if not code.strip():
         return data
-        
-    aeval = Interpreter(usersyms={"data": data, "pd": pd, "np": np})
+
+    aeval = build_interpreter(reader, data)
     aeval(code)
-    
+    if aeval.error:
+        raise RuntimeError(format_asteval_error(aeval))
     return aeval.symtable.get("data", data)
 
-def execute_metric(data: Any, code: str) -> Any:
-    """
-    Execute metric logic.
-    Expected to return a value (number or dict).
-    """
+
+def execute_metric(reader: Any, data: Any, code: str) -> Any:
     if not code.strip():
         return 0
-        
-    aeval = Interpreter(usersyms={"data": data, "pd": pd, "np": np})
-    return aeval(code)
+
+    aeval = build_interpreter(reader, data)
+    result = aeval(code)
+    if aeval.error:
+        raise RuntimeError(format_asteval_error(aeval))
+    return result
+
 
 def convert_numpy(obj):
     if isinstance(obj, np.integer):
@@ -61,49 +107,32 @@ def convert_numpy(obj):
     else:
         return obj
 
+
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
     try:
-        # 1. Load Waveform (Mocking WaveKit for now)
-        # TODO: Replace with actual wavekit loading logic
-        # data = wavekit.load(req.file_path) 
-        
-        # Mock data for demonstration purposes if file loading is not implemented
-        # In a real scenario, this would come from the fsdb/vcd file
-        data = pd.DataFrame({
-            'timestamp': range(100),
-            'sm_active': np.random.rand(100),
-            'dram_read': np.random.rand(100) * 100,
-            'dram_write': np.random.rand(100) * 100,
-            'l2_hit': np.random.rand(100)
-        })
-        
-        # 2. Transform Data
-        processed_data = execute_transform(data, req.transform_code)
-        
-        # 3. Calculate Metrics
-        metric_result = execute_metric(processed_data, req.metric_code)
-        
-        # 4. Prepare Response
-        # Convert DataFrame to list of dicts for JSON response
+        reader_class = get_reader_class(req.file_path)
+        with reader_class(req.file_path) as reader:
+            processed_data = execute_transform(reader, req.transform_code)
+            metric_result = execute_metric(reader, processed_data, req.metric_code)
+
         if isinstance(processed_data, pd.DataFrame):
-            table_data = processed_data.reset_index().to_dict(orient='records')
-            # Limit rows if too large? For now send all.
+            table_data = processed_data.reset_index().to_dict(orient="records")
             if len(table_data) > 1000:
-                table_data = table_data[:1000] # Safety limit
+                table_data = table_data[:1000]
         else:
-            table_data = [] # Or handle other types
-            
+            table_data = []
+
         return {
             "status": "success",
             "data": table_data,
-            "metrics": convert_numpy(metric_result)
+            "metrics": convert_numpy(metric_result),
         }
-        
+
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"status": "error", "error": str(e)}
+        logging.exception("Analyze request failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
