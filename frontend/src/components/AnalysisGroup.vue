@@ -100,6 +100,7 @@
           <component 
             :is="child.type === 'group' ? 'AnalysisGroup' : Analysis" 
             :element="child"
+            :wave-path="wavePath"
             :ref="(el: any) => setChildRef(el, child.id)"
             v-model:name="child.name"
             v-model:description="child.description"
@@ -145,6 +146,7 @@ defineOptions({
 const props = defineProps<{
   element: any; // The group data object
   isRoot?: boolean;
+  wavePath?: string;
 }>();
 
 const emit = defineEmits<{

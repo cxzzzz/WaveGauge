@@ -15,10 +15,19 @@
     </div>
     
     <div class="max-w-[800px] mx-auto">
-      <!-- Root Analysis Group -->
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Waveform Path</span>
+        <a-input
+          v-model:value="wavePath"
+          size="small"
+          placeholder="Enter waveform file path"
+          class="!text-xs"
+        />
+      </div>
       <AnalysisGroup 
         :element="rootGroup" 
         :is-root="true"
+        :wave-path="wavePath"
       />
     </div>
   </div>
@@ -74,6 +83,7 @@ const rootGroup = ref({
   ]
 });
 
+const wavePath = ref('');
 const isDarkMode = ref(true);
 
 const toggleTheme = (checked: boolean) => {

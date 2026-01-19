@@ -220,6 +220,7 @@ const props = defineProps<{
   description?: string;
   result?: number | Record<string, number>;
   history?: Array<{ step: string | number; [key: string]: any }>;
+  wavePath?: string;
 }>();
 
 const emit = defineEmits<{
@@ -270,11 +271,15 @@ const saveName = () => {
 };
 
 const runAnalysis = async () => {
+  if (!props.wavePath?.trim()) {
+    message.error('Waveform path is required');
+    return;
+  }
   message.loading(`Running analysis for ${props.name}...`, 0);
   
   try {
     const response = await axios.post(`${API_URL}/analyze`, {
-      file_path: 'dummy.fsdb', // Placeholder
+      file_path: props.wavePath,
       transform_code: props.transformCode,
       metric_code: props.metricCode
     });
