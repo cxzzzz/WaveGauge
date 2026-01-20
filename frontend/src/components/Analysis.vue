@@ -632,7 +632,8 @@ const buildChartOption = (
   chartType: string,
   zoomStart: number,
   zoomEnd: number,
-  showSlider: boolean
+  showSlider: boolean,
+  userMaxValue?: number
 ): echarts.EChartsOption => {
   const textColor = isDark.value ? '#a0a0a0' : '#666';
   const axisColor = isDark.value ? '#404040' : '#e0e0e0';
@@ -685,7 +686,8 @@ const buildChartOption = (
       type: 'value',
       axisLine: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor },
-      splitLine: { lineStyle: { color: isDark.value ? '#333' : '#eee' } }
+      splitLine: { lineStyle: { color: isDark.value ? '#333' : '#eee' } },
+      max: Number.isFinite(userMaxValue) ? Math.max(1, Number(userMaxValue)) : undefined
     },
     dataZoom,
     series: []
@@ -715,9 +717,10 @@ const buildChartOption = (
       axisLine: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor }
     };
+    const effectiveMax = Number.isFinite(userMaxValue) ? Number(userMaxValue) : maxValue;
     option.visualMap = {
       min: 0,
-      max: Math.max(1, maxValue),
+      max: Math.max(1, effectiveMax),
       calculable: true,
       orient: 'horizontal',
       left: 'center',
@@ -786,7 +789,7 @@ const updateCharts = () => {
   const chartType = coreModel.value.chartType ?? 'line';
   if (chartInstance) {
     if (historyData.value.length) {
-      const option = buildChartOption(historyData.value, chartType, zoomStart, zoomEnd, true);
+      const option = buildChartOption(historyData.value, chartType, zoomStart, zoomEnd, true, coreModel.value.maxValue);
       isSettingZoom.value = true;
       chartInstance.setOption(option);
       setTimeout(() => {
@@ -798,7 +801,7 @@ const updateCharts = () => {
   }
   if (baselineChartInstance) {
     if (baselineHistoryData.value.length) {
-      const option = buildChartOption(baselineHistoryData.value, chartType, baselineStart, baselineEnd, true);
+      const option = buildChartOption(baselineHistoryData.value, chartType, baselineStart, baselineEnd, true, coreModel.value.maxValue);
       isSettingZoom.value = true;
       baselineChartInstance.setOption(option);
       setTimeout(() => {
