@@ -210,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, toRef } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, toRef, unref } from 'vue';
 import { 
   CodeOutlined, 
   UpOutlined, 
@@ -303,9 +303,7 @@ const tabState = toRef(analysisStore.tabs, tabId.value);
 const zoomRange = toRef(tabState.value, 'zoom');
 
 const visibleHistory = computed(() => getVisibleHistory(historyData.value, zoomRange.value));
-const summaryValues = computed(() => {
-  return calculateSummary(visibleHistory.value, summaryTypeValue.value);
-});
+const summaryValues = computed(() => calculateSummary(visibleHistory.value, summaryTypeValue.value));
 const wavePath = computed<string>(() => {
   return tabState.value.wavePath;
 });
@@ -323,19 +321,18 @@ const hasBaselineComparison = computed(() => {
   return baselineHistoryData.value.timestamps.length > 0;
 });
 const baselineHistoryData = computed(() => props.context.baselineHistory);
-const baselineZoomRange = ref<ZoomRange>(zoomRange.value);
+const baselineZoomRange = ref<ZoomRange>({start: 0, end: Number.MIN_SAFE_INTEGER});
 const baselineVisibleHistory = computed(() => {
   return getVisibleHistory(baselineHistoryData.value, baselineZoomRange.value);
 });
-const baselineSummaryValues = computed(() => {
-  if (!hasBaselineComparison.value) return undefined;
-  if (!baselineVisibleHistory.value.timestamps.length) return undefined;
-  return calculateSummary(baselineVisibleHistory.value, summaryTypeValue.value);
-});
+const baselineSummaryValues = computed(() => calculateSummary(
+  baselineVisibleHistory.value,
+  summaryTypeValue.value
+));
 
 const getMaxFromHistory = (history: History, key: string) => {
   let maxVal = 0;
-  history.values[key]?.forEach((item) => {
+  history.values[key]!.forEach((item) => {
     const value = Number(item);
     if (Number.isFinite(value) && value > maxVal) {
       maxVal = value;
@@ -364,8 +361,8 @@ const getMaxValueForDisplay = (key: string) => {
 };
 
 const getBaselineValueForKey = (key: string) => {
-  if (!hasBaselineComparison.value) return undefined;
-  return baselineSummaryValues.value?.[key];
+  if (!hasBaselineComparison.value) return Number.NaN;
+  return baselineSummaryValues.value[key]!;
 };
 
 type DisplayItem = {
@@ -379,8 +376,8 @@ type DisplayItem = {
 
 const displayItems = computed<DisplayItem[]>(() => {
   return Object.keys(summaryValues.value).map((key) => {
-    const currentValue = Number(summaryValues.value?.[key]);
-    const baselineValue = getBaselineValueForKey(key) ?? Number.NaN;
+    const currentValue = Number(summaryValues.value[key]);
+    const baselineValue = getBaselineValueForKey(key);
     return {
       key,
       label: key,
@@ -399,7 +396,7 @@ watch(name, (val) => {
 const startEditing = async () => {
   isEditingName.value = true;
   await nextTick();
-  nameInput.value?.focus();
+  nameInput.value!.focus();
 };
 
 const saveName = () => {
@@ -410,7 +407,7 @@ const saveName = () => {
 };
 
 const applyBackendError = (backendError: unknown, prefix: string) => {
-  const messageText = String(backendError ?? 'Unknown error');
+  const messageText = String(backendError);
   errorMessage.value = messageText;
   message.error(`${prefix}: ${messageText}`);
 };
@@ -445,16 +442,12 @@ const runAnalysis = async () => {
       updateContext({ history: newHistory });
     } else {
       message.destroy();
-      const backendError = response.data?.error ?? 'Unknown error';
+      const backendError = response.data.error;
       applyBackendError(backendError, 'Error');
     }
   } catch (error: any) {
     message.destroy();
-    const backendError =
-      error?.response?.data?.detail ??
-      error?.response?.data?.error ??
-      error?.message ??
-      'Unknown error';
+    const backendError = error.response.data.detail;
     applyBackendError(backendError, 'Request failed');
   }
 };
@@ -536,7 +529,7 @@ const getVisibleHistory = (
   const timestamps = history.timestamps.slice(startIndex, endIndex + 1);
   const values: Record<string, number[]> = {};
   Object.keys(history.values).forEach((key) => {
-    values[key] = (history.values[key] ?? []).slice(startIndex, endIndex + 1);
+    values[key] = history.values[key]!.slice(startIndex, endIndex + 1);
   });
   return { timestamps, values };
 };
@@ -544,6 +537,7 @@ const getVisibleHistory = (
 // Initialize Chart
 const baselineChartRef = ref<HTMLElement | null>(null);
 let baselineChartInstance: echarts.ECharts | null = null;
+let resizeBound = false;
 
 const buildChartOption = (
   history: History,
@@ -557,12 +551,17 @@ const buildChartOption = (
   const steps = history.timestamps.map(item => String(item));
   const keys = Object.keys(history.values);
   const gridBottom = showSlider ? '20%' : '8%';
+
+  const realZoomRange = {
+    start: zoomRange.start,
+    end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
+  }
   const dataZoom: echarts.DataZoomComponentOption[] = [
     {
       type: 'inside',
       xAxisIndex: 0,
-      start: zoomRange.start,
-      end: zoomRange.end
+      start: realZoomRange.start,
+      end: realZoomRange.end
     }
   ];
   if (showSlider) {
@@ -571,10 +570,19 @@ const buildChartOption = (
       xAxisIndex: 0,
       height: '10%',
       bottom: '2%',
-      start: zoomRange.start,
-      end: zoomRange.end
+      start: realZoomRange.start,
+      end: realZoomRange.end
     });
   }
+  let derivedMax = 0;
+  keys.forEach((key) => {
+    history.values[key]!.forEach((rawValue) => {
+      const value = Number(rawValue);
+      if (Number.isFinite(value)) {
+        derivedMax = Math.max(derivedMax, value);
+      }
+    });
+  });
   const option: echarts.EChartsOption = {
     backgroundColor: 'transparent',
     grid: {
@@ -604,7 +612,7 @@ const buildChartOption = (
       axisLine: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor },
       splitLine: { lineStyle: { color: isDark.value ? '#333' : '#eee' } },
-      max: Number.isFinite(userMaxValue) ? Math.max(1, Number(userMaxValue)) : undefined
+      max: Number.isFinite(userMaxValue) ? Math.max(1, Number(userMaxValue)) : Math.max(1, derivedMax)
     },
     dataZoom,
     series: []
@@ -616,7 +624,7 @@ const buildChartOption = (
     let maxValue = 0;
     yCategories.forEach((key, yIndex) => {
       steps.forEach((_, xIndex) => {
-        const rawValue = Number(history.values[key]?.[xIndex] ?? 0);
+        const rawValue = Number(history.values[key]![xIndex]);
         const value = Number.isFinite(rawValue) ? rawValue : 0;
         maxValue = Math.max(maxValue, value);
         heatmapData.push([xIndex, yIndex, value]);
@@ -655,7 +663,7 @@ const buildChartOption = (
     const isStacked = chartType === 'stacked_bar' || chartType === 'stacked_line';
     const seriesType = chartType.includes('bar') ? 'bar' : 'line';
     const series = keys.map(key => {
-      const data = steps.map((_, index) => history.values[key]?.[index] ?? 0);
+      const data = steps.map((_, index) => history.values[key]![index]);
       if (seriesType === 'line') {
         const lineItem: echarts.LineSeriesOption = {
           name: key,
@@ -686,10 +694,9 @@ const buildChartOption = (
 };
 
 const createChartInstance = (
-  target: HTMLElement | null,
+  target: HTMLElement,
   onZoom: (event: any) => void
 ) => {
-  if (!target) return null;
   const instance = echarts.init(target);
   instance.on('datazoom', onZoom);
   return instance;
@@ -707,15 +714,10 @@ const disposeCharts = () => {
 };
 
 const applyChartOption = (
-  instance: echarts.ECharts | null,
+  instance: echarts.ECharts,
   history: History,
   zoomRange: ZoomRange
 ) => {
-  if (!instance) return;
-  if (!history.timestamps.length) {
-    instance.clear();
-    return;
-  }
   const option = buildChartOption(
     history,
     chartTypeValue.value,
@@ -731,39 +733,33 @@ const applyChartOption = (
 };
 
 const initCharts = () => {
-  chartInstance = createChartInstance(chartRef.value, 
+  chartInstance = createChartInstance(chartRef.value!, 
     (event: any) => updateZoomFromEvent(event, zoomRange));
   if (hasBaselineComparison.value) {
-    baselineChartInstance = createChartInstance(baselineChartRef.value, 
+    baselineChartInstance = createChartInstance(baselineChartRef.value!, 
     (event: any) => updateZoomFromEvent(event, baselineZoomRange));
+  }
+  if (!resizeBound) {
+    window.addEventListener('resize', handleResize);
+    resizeBound = true;
   }
   updateCharts();
 };
 
 const updateCharts = () => {
-  if (!chartInstance && !baselineChartInstance) return;
-  applyChartOption(
-    chartInstance,
-    historyData.value,
-    zoomRange.value
-  );
-  applyChartOption(
-    baselineChartInstance,
-    baselineHistoryData.value,
-    baselineZoomRange.value
-  );
+  applyChartOption(chartInstance!, historyData.value, zoomRange.value);
+  if (hasBaselineComparison.value) {
+    applyChartOption(baselineChartInstance!, baselineHistoryData.value, baselineZoomRange.value);
+  }
 };
 
 const updateZoomFromEvent = (
-  event: any,
+  event: { start: number, end: number },
   zoomRangeRef: { value: ZoomRange },
 ) => {
   if (isSettingZoom.value) return;
-  const payload = event?.batch?.[0] ?? event ?? {};
-  const start = typeof payload.start === 'number' ? payload.start : zoomRangeRef.value.start;
-  const end = typeof payload.end === 'number' ? payload.end : zoomRangeRef.value.end;
-  zoomRangeRef.value.start = start;
-  zoomRangeRef.value.end = end;
+  zoomRangeRef.value.start = event.start;
+  zoomRangeRef.value.end = event.end;
 };
 
 // Watch theme changes
@@ -799,15 +795,11 @@ watch(showTimeline, async (val) => {
   }
 });
 
-watch(historyData, () => {
-  if (showTimeline.value) {
-    updateCharts();
-  }
-}, { deep: true });
-
 watch(
-  [ zoomRange, baselineZoomRange, chartTypeValue ],
-  () => { if (showTimeline.value) { updateCharts() } }
+  [historyData, zoomRange, baselineZoomRange, chartTypeValue ],
+  () => { 
+    if (showTimeline.value) { updateCharts() } }
+  , { deep: true }
 );
 
 watch([baselineHistoryData, hasBaselineComparison], () => {
@@ -821,15 +813,17 @@ watch([baselineHistoryData, hasBaselineComparison], () => {
 
 // Handle Resize
 const handleResize = () => {
-  chartInstance?.resize();
-  baselineChartInstance?.resize();
+  chartInstance!.resize();
+  if (hasBaselineComparison.value) {
+    baselineChartInstance!.resize();
+  }
 };
 
-window.addEventListener('resize', handleResize);
-
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize);
+  if (resizeBound) {
+    window.removeEventListener('resize', handleResize);
+  }
   disposeCharts();
-  observer?.disconnect();
+  observer!.disconnect();
 });
 </script>

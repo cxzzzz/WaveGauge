@@ -24,7 +24,7 @@ export const useAnalysisStore = defineStore('analysis', {
   actions: {
     addTab(id: string) {
       this.tabs[id] = {
-        zoom: { start: 0, end: 100 },
+        zoom: { start: 0, end: Number.MAX_SAFE_INTEGER},
         wavePath: '',
         sampleRate: 1
       };

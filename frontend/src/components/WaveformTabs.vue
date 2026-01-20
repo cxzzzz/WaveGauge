@@ -31,7 +31,7 @@
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Sample Every (cycles)</span>
         <a-input-number
           :value="tabState(tab.id).sampleRate"
-          @update:value="tabState(tab.id).sampleRate = Number($event ?? 1)"
+          @update:value="updateSampleRate(tab.id, $event)"
           size="small"
           :min="1"
           :step="1"
@@ -66,7 +66,7 @@ type WaveformTab = {
 };
 
 type History = {
-  timestamps: Array<string | number>;
+  timestamps: Array<number>;
   values: Record<string, number[]>;
 };
 
@@ -150,6 +150,13 @@ const waveformTabs = ref<WaveformTab[]>([
 ]);
 const activeTabId = ref('');
 const nextTabIndex = ref(0);
+const updateSampleRate = (id: string, value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new Error('Invalid sample rate');
+  }
+  tabState(id).sampleRate = numeric;
+};
 const addWaveformTab = () => {
   const id = `waveform-${nextTabIndex.value}`;
   nextTabIndex.value += 1;
@@ -169,9 +176,11 @@ const tabNames = computed(() => {
   const counts: Record<string, number> = {};
   const result: Record<string, string> = {};
   waveformTabs.value.forEach((tab) => {
-    const fileName = tabState(tab.id).wavePath.split('/').pop() ?? '';
+    const fileNamePart = tabState(tab.id).wavePath.split('/').pop();
+    const fileName = typeof fileNamePart === 'string' ? fileNamePart : '';
     const base = fileName.replace(/\.[^/.]+$/, '') || 'Waveform';
-    const count = counts[base] ?? 0;
+    const existing = counts[base];
+    const count = existing === undefined ? 0 : existing;
     counts[base] = count + 1;
     result[tab.id] = count === 0 ? base : `${base}-${count}`;
   });
@@ -211,7 +220,8 @@ const handleTabEdit = (targetKey: string | MouseEvent, action: 'add' | 'remove')
   waveformTabs.value.splice(index, 1);
   analysisStore.removeTab(id);
   if (activeTabId.value === id) {
-    activeTabId.value = waveformTabs.value[0]?.id ?? '';
+    const firstTab = waveformTabs.value[0];
+    activeTabId.value = firstTab ? firstTab.id : '';
   }
 };
 

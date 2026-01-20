@@ -158,7 +158,7 @@ type GroupCore = {
 };
 
 type History = {
-  timestamps: Array<string | number>;
+  timestamps: Array<number>;
   values: Record<string, number[]>;
 };
 
@@ -234,7 +234,7 @@ watch(groupName, (val) => {
 const startEditing = () => {
   isEditingName.value = true;
   setTimeout(() => {
-    nameInput.value?.focus();
+    nameInput.value!.focus();
   }, 0);
 };
 
@@ -309,10 +309,13 @@ const setChildRef = (el: any, id: string) => {
 const runAllAnalyses = async () => {
   for (const child of childrenModel.value) {
     const refInstance = childRefs.value.get(child.id);
+    if (!refInstance) {
+      throw new Error(`Missing ref for child ${child.id}`);
+    }
     if (child.type === 'group') {
-      await refInstance?.runAllAnalyses?.();
+      await refInstance.runAllAnalyses();
     } else if (child.type === 'analysis') {
-      await refInstance?.runAnalysis?.();
+      await refInstance.runAnalysis();
     }
   }
 };
@@ -326,12 +329,17 @@ const cleanExportData = (data: any): any => {
     return data.map(cleanExportData);
   } else if (typeof data === 'object' && data !== null) {
     const { context, ...rest } = data;
-    const children = rest.children ?? rest.core?.children;
+    let children: any[] | undefined;
+    if ('children' in rest) {
+      children = rest.children;
+    } else if ('core' in rest && rest.core && 'children' in rest.core) {
+      children = rest.core.children;
+    }
     if (children) {
-      if (rest.children) {
+      if ('children' in rest) {
         rest.children = cleanExportData(children);
       }
-      if (rest.core?.children) {
+      if ('core' in rest && rest.core && 'children' in rest.core) {
         rest.core = {
           ...rest.core,
           children: cleanExportData(children)
@@ -371,17 +379,27 @@ const exportGroup = () => {
 };
 
 const triggerImport = () => {
-  fileInput.value?.click();
+  fileInput.value!.click();
 };
 
 const handleImport = (event: Event) => {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (!file) return;
+  const input = event.target as HTMLInputElement;
+  if (!input.files || input.files.length === 0) {
+    throw new Error('No file selected');
+  }
+  const file = input.files[0];
+  if (!file) {
+    throw new Error('No file selected');
+  }
   
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const content = e.target?.result as string;
+      const target = e.target as FileReader;
+      if (typeof target.result !== 'string') {
+        throw new Error('Invalid file content');
+      }
+      const content = target.result;
       const json = JSON.parse(content);
       
       if (json.version && json.data) {
@@ -390,26 +408,35 @@ const handleImport = (event: Event) => {
         const processImportedItem = (item: any) => {
           item.id = uuidv4();
           if (item.type === 'analysis') {
-            if (!item.core) {
-              item.core = {
-                name: item.name ?? 'Analysis',
-                transformCode: item.transformCode ?? '',
-                description: item.description ?? '',
-                chartType: item.chartType ?? 'line',
-                summaryType: item.summaryType ?? 'avg',
-                maxValue: Number.isFinite(item.maxValue) ? Number(item.maxValue) : Number.NaN
-              };
+            const source = item.core ? item.core : item;
+            if (typeof source.name !== 'string' || source.name.length === 0) {
+              throw new Error('Invalid analysis name');
             }
+            if (typeof source.transformCode !== 'string') {
+              throw new Error('Invalid analysis transformCode');
+            }
+            if (typeof source.chartType !== 'string' || source.chartType.length === 0) {
+              throw new Error('Invalid analysis chartType');
+            }
+            if (typeof source.summaryType !== 'string' || source.summaryType.length === 0) {
+              throw new Error('Invalid analysis summaryType');
+            }
+            const description = typeof source.description === 'string' ? source.description : '';
+            const maxValue = Number.isFinite(Number(source.maxValue))
+              ? Number(source.maxValue)
+              : Number.NaN;
             item.core = {
-              name: item.core.name ?? 'Analysis',
-              transformCode: item.core.transformCode ?? '',
-              description: item.core.description ?? '',
-              chartType: item.core.chartType ?? 'line',
-              summaryType: item.core.summaryType ?? 'avg',
-              maxValue: Number.isFinite(item.core.maxValue) ? Number(item.core.maxValue) : Number.NaN
+              name: source.name,
+              transformCode: source.transformCode,
+              description,
+              chartType: source.chartType,
+              summaryType: source.summaryType,
+              maxValue
             };
             item.context = {
-              history: item.context?.history ?? item.history ?? { timestamps: [], values: {} }
+              history: item.context && item.context.history
+                ? item.context.history
+                : (item.history ? item.history : { timestamps: [], values: {} })
             };
             delete item.name;
             delete item.transformCode;
@@ -423,12 +450,22 @@ const handleImport = (event: Event) => {
           }
           if (item.type === 'group') {
             if (!item.core) {
-              item.core = { name: item.name ?? 'Group', collapsed: false, children: [] };
+              if (typeof item.name !== 'string' || item.name.length === 0) {
+                throw new Error('Invalid group name');
+              }
+              item.core = { name: item.name, collapsed: false, children: [] };
             }
-            const children = item.core.children ?? item.state?.children ?? item.children ?? [];
+            const coreChildren = item.core.children;
+            const stateChildren = item.state && item.state.children ? item.state.children : undefined;
+            const directChildren = item.children;
+            const children = coreChildren || stateChildren || directChildren || [];
             item.core = {
               ...item.core,
-              collapsed: item.core.collapsed ?? item.state?.collapsed ?? item.collapsed ?? false,
+              collapsed: typeof item.core.collapsed === 'boolean'
+                ? item.core.collapsed
+                : (item.state && typeof item.state.collapsed === 'boolean'
+                  ? item.state.collapsed
+                  : (typeof item.collapsed === 'boolean' ? item.collapsed : false)),
               children
             };
             delete item.name;
@@ -452,7 +489,7 @@ const handleImport = (event: Event) => {
       message.error('Failed to parse JSON');
     } finally {
         // Reset input
-        if (fileInput.value) fileInput.value.value = '';
+        fileInput.value!.value = '';
     }
   };
   reader.readAsText(file);
