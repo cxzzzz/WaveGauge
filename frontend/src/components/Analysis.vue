@@ -543,14 +543,13 @@ const buildChartOption = (
   history: History,
   chartType: string,
   zoomRange: ZoomRange,
-  showSlider: boolean,
-  userMaxValue: number
+  userMaxValue: number 
 ): echarts.EChartsOption => {
   const textColor = isDark.value ? '#a0a0a0' : '#666';
   const axisColor = isDark.value ? '#404040' : '#e0e0e0';
   const steps = history.timestamps.map(item => String(item));
   const keys = Object.keys(history.values);
-  const gridBottom = showSlider ? '20%' : '8%';
+  const gridBottom = '20%' 
 
   const realZoomRange = {
     start: zoomRange.start,
@@ -562,27 +561,16 @@ const buildChartOption = (
       xAxisIndex: 0,
       start: realZoomRange.start,
       end: realZoomRange.end
-    }
-  ];
-  if (showSlider) {
-    dataZoom.push({
+    }, {
       type: 'slider',
       xAxisIndex: 0,
       height: '10%',
       bottom: '2%',
       start: realZoomRange.start,
       end: realZoomRange.end
-    });
-  }
-  let derivedMax = 0;
-  keys.forEach((key) => {
-    history.values[key]!.forEach((rawValue) => {
-      const value = Number(rawValue);
-      if (Number.isFinite(value)) {
-        derivedMax = Math.max(derivedMax, value);
-      }
-    });
-  });
+    }
+  ];
+
   const option: echarts.EChartsOption = {
     backgroundColor: 'transparent',
     grid: {
@@ -612,7 +600,7 @@ const buildChartOption = (
       axisLine: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor },
       splitLine: { lineStyle: { color: isDark.value ? '#333' : '#eee' } },
-      max: Number.isFinite(userMaxValue) ? Math.max(1, Number(userMaxValue)) : Math.max(1, derivedMax)
+      max: Number.isFinite(userMaxValue) ? userMaxValue : undefined
     },
     dataZoom,
     series: []
@@ -722,7 +710,6 @@ const applyChartOption = (
     history,
     chartTypeValue.value,
     zoomRange,
-    true,
     maxValueValue.value
   );
   isSettingZoom.value = true;
