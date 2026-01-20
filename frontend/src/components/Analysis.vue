@@ -24,7 +24,13 @@
       <div class="flex items-center gap-2">
         <template v-if="!isMultiValue">
           <template v-for="item in displayItems" :key="item.key">
-            <ProgressValueDisplay :item="item" value-width-class="w-[35px]" />
+            <ProgressValueDisplay
+              :current-value="item.currentValue"
+              :baseline-value="item.baselineValue"
+              :max-value="item.maxValue"
+              :has-baseline="item.hasBaseline"
+              value-width-class="w-[35px]"
+            />
           </template>
         </template>
         
@@ -114,7 +120,13 @@
       <div v-for="item in displayItems" :key="item.key" class="flex justify-between items-center py-0.5">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ item.label }}</span>
         <div class="flex items-center gap-2">
-          <ProgressValueDisplay :item="item" value-width-class="w-[48px]" />
+          <ProgressValueDisplay
+            :current-value="item.currentValue"
+            :baseline-value="item.baselineValue"
+            :max-value="item.maxValue"
+            :has-baseline="item.hasBaseline"
+            value-width-class="w-[48px]"
+          />
         </div>
       </div>
     </div>
@@ -321,12 +333,6 @@ const zoomEndValue = computed({
 const summaryValue = computed(() => {
   if (!historyData.value.length) return undefined;
   const summaryType = coreModel.value.summaryType ?? 'avg';
-  console.log(zoomStartValue.value, zoomEndValue.value);
-  console.log(getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value));
-  console.log(calculateSummary(
-    getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value),
-    summaryType
-  ));
   return calculateSummary(
     getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value),
     summaryType
@@ -334,16 +340,6 @@ const summaryValue = computed(() => {
 });
 const hasResult = computed(() => summaryValue.value !== undefined);
 const value = computed(() => summaryValue.value);
-const formatNumber = (val: number) => {
-  if (!Number.isFinite(val)) return '--';
-  const fixed = val.toFixed(3);
-  return fixed.replace(/\.?0+$/, '');
-};
-const formatOptionalNumber = (val: unknown) => {
-  const num = Number(val);
-  if (!Number.isFinite(num)) return '--';
-  return formatNumber(num);
-};
 const wavePath = computed(() => contextModel.value.wavePath);
 
 const isMultiValue = computed(() => {
@@ -410,94 +406,40 @@ const getBaselineValueForKey = (key: string) => {
   return base as number | undefined;
 };
 
-const calcPercent = (val: number | undefined, maxVal: number) => {
-  const numeric = Number(val);
-  if (!Number.isFinite(numeric)) return 0;
-  if (!(maxVal > 0)) return 0;
-  return Math.min(Math.max((numeric / maxVal) * 100, 0), 100);
-};
-
-const calcDelta = (current: number | undefined, baseline: number | undefined) => {
-  const cur = Number(current);
-  const base = Number(baseline);
-  if (!Number.isFinite(cur) || !Number.isFinite(base)) return undefined;
-  if (base === 0) return cur >= 0 ? 'pos_inf' : 'neg_inf';
-  return ((cur - base) / base) * 100;
-};
-
 type DisplayItem = {
   key: string;
   label: string;
+  currentValue: number | undefined;
+  baselineValue: number | undefined;
+  maxValue: number;
   hasBaseline: boolean;
-  currentText: string;
-  baselineText: string;
-  currentPercent: number;
-  baselinePercent: number;
-  deltaPercentText: string;
-  deltaPercentClass: string;
-  maxText: string;
-  currentRatioText: string;
-};
-
-const buildDisplayItem = (
-  key: string,
-  label: string,
-  currentValue: number | undefined,
-  baselineValue: number | undefined
-): DisplayItem => {
-  const maxVal = getMaxValueForDisplay(key);
-  const currentPercent = calcPercent(currentValue, maxVal);
-  const baselinePercent = calcPercent(baselineValue, maxVal);
-  const delta = calcDelta(currentValue, baselineValue);
-  const deltaPercentText =
-    delta === 'pos_inf'
-      ? '(+∞)'
-      : delta === 'neg_inf'
-        ? '(-∞)'
-        : delta === undefined
-          ? '--'
-          : `(${delta >= 0 ? '+' : '-'}${Math.abs(delta).toFixed(1)}%)`;
-  const deltaPercentClass =
-    delta === 'pos_inf'
-      ? 'text-orange-500'
-      : delta === 'neg_inf'
-        ? 'text-purple-500'
-        : delta === undefined
-          ? 'text-gray-400 dark:text-[#8a8a8a]'
-          : delta > 0
-            ? 'text-orange-500'
-            : delta < 0
-              ? 'text-purple-500'
-              : 'text-gray-400 dark:text-[#8a8a8a]';
-  return {
-    key,
-    label,
-    hasBaseline: hasBaselineComparison.value,
-    currentText: formatOptionalNumber(currentValue),
-    baselineText: formatOptionalNumber(baselineValue),
-    currentPercent,
-    baselinePercent,
-    deltaPercentText,
-    deltaPercentClass,
-    maxText: formatOptionalNumber(maxVal),
-    currentRatioText:
-      Number.isFinite(Number(currentValue)) && maxVal > 0
-        ? `(${currentPercent.toFixed(1)}%)`
-        : '(--)'
-  };
 };
 
 const displayItems = computed<DisplayItem[]>(() => {
   if (!isMultiValue.value) {
     const currentValue = hasResult.value ? Number(value.value) : undefined;
     const baselineValue = getBaselineValueForKey('__single__');
-    return [buildDisplayItem('__single__', '', currentValue, baselineValue)];
+    return [{
+      key: '__single__',
+      label: '',
+      currentValue,
+      baselineValue,
+      maxValue: getMaxValueForDisplay('__single__'),
+      hasBaseline: hasBaselineComparison.value
+    }];
   }
   const resultMap = value.value as Record<string, number>;
   return Object.keys(resultMap ?? {}).map((key) => {
     const currentValue = Number(resultMap[key]);
     const baselineValue = getBaselineValueForKey(key);
-    return buildDisplayItem(key, key, currentValue, baselineValue);
+    return {
+      key,
+      label: key,
+      currentValue,
+      baselineValue,
+      maxValue: getMaxValueForDisplay(key),
+      hasBaseline: hasBaselineComparison.value
+    };
   });
 });
 
