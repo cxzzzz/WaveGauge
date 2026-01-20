@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from asteval import Interpreter
+from wavekit import Waveform
 
 try:
     from wavekit import VcdReader, FsdbReader
@@ -66,10 +67,10 @@ def execute_transform(
         return data
 
     aeval = build_interpreter(reader, data, context)
-    aeval(code)
+    result = aeval(code)
     if aeval.error:
         raise RuntimeError(format_asteval_error(aeval))
-    return aeval.symtable.get('data', data)
+    return result
 
 
 class AnalysisEngine:
@@ -87,81 +88,22 @@ class AnalysisEngine:
     def analyze(self, transform_code: str, sample_rate: int = 1) -> dict[str, Any]:
         context: dict[str, Any] = {'timestamps': None}
         processed_data = execute_transform(self.reader, transform_code, context)
+        processed_data = {'': processed_data} if not isinstance(processed_data, dict) else processed_data
 
-        if _is_waveform(processed_data):
-            timestamps, values = _process_waveform(processed_data, sample_rate)
-            key = getattr(processed_data, 'name', None) or 'value'
-            return {'timestamps': timestamps.tolist(), 'values': {key: values.tolist()}}
+        result: dict[str, Any] = {'timestamps': None, 'values': {}}
 
-        if isinstance(processed_data, dict):
-            if not processed_data:
-                return {'timestamps': [], 'values': {}}
-            normalized_rate = max(int(sample_rate or 1), 1)
-            first_key = next(iter(processed_data.keys()))
-            first_wave = processed_data[first_key]
-            if not _is_waveform(first_wave):
-                raise RuntimeError('Expected Waveform values in result dict')
-            first_timestamps = _to_float_array(first_wave.time)
-            timestamps = (
-                _downsample_values(first_timestamps, normalized_rate)
-                if normalized_rate > 1
-                else first_timestamps
-            )
-            values: dict[str, list[float]] = {}
-            for key, wave in processed_data.items():
-                if not _is_waveform(wave):
-                    raise RuntimeError('Expected Waveform values in result dict')
-                wave_timestamps = _to_float_array(wave.time)
-                if wave_timestamps.shape[0] != first_timestamps.shape[0]:
-                    raise RuntimeError('Waveform timestamps length mismatch')
-                if not np.array_equal(wave_timestamps, first_timestamps):
-                    raise RuntimeError('Waveform timestamps mismatch')
-                wave_values = _to_float_array(wave.value)
-                if wave_values.shape[0] != first_timestamps.shape[0]:
-                    raise RuntimeError('Waveform values length mismatch')
-                if normalized_rate > 1:
-                    wave_values = _downsample_values(wave_values, normalized_rate)
-                values[key] = wave_values.tolist()
-            return {'timestamps': timestamps.tolist(), 'values': values}
-
-        return {'timestamps': [], 'values': {}}
-
-
-def _to_float_array(values: Any) -> np.ndarray:
-    if isinstance(values, np.ndarray):
-        return values.astype(float, copy=False)
-    return np.asarray(values, dtype=float)
-
-
-def _is_waveform(value: Any) -> bool:
-    return hasattr(value, 'time') and hasattr(value, 'value')
-
-
-def _process_waveform(wave: Any, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
-    normalized_rate = max(int(sample_rate or 1), 1)
-    timestamps = _to_float_array(wave.time)
-    values = _to_float_array(wave.value)
-    if timestamps.shape[0] != values.shape[0]:
-        raise RuntimeError('Waveform timestamps length mismatch')
-    if normalized_rate > 1:
-        timestamps = _downsample_values(timestamps, normalized_rate)
-        values = _downsample_values(values, normalized_rate)
-    return timestamps, values
-
-
-def _downsample_values(data: np.ndarray, rate: int) -> np.ndarray:
-    if rate <= 1:
-        return data.astype(float, copy=False)
-    length = data.shape[0]
-    if length == 0:
-        return data.astype(float, copy=False)
-    trimmed = (length // rate) * rate
-    if trimmed > 0:
-        head = data[:trimmed].reshape(-1, rate)
-        head_mean = np.nanmean(head, axis=1)
-    else:
-        head_mean = np.empty((0,), dtype=float)
-    if trimmed < length:
-        tail_mean = np.nanmean(data[trimmed:])
-        return np.concatenate([head_mean, np.array([tail_mean], dtype=float)])
-    return head_mean
+        for key, value in processed_data.items():
+            assert isinstance(value, Waveform), f'Expected Waveform value for key {key}'
+            sampled_wave = value.sample(sample_rate, func=np.mean)
+            result['values'][key] = sampled_wave.value.tolist()
+            if result['timestamps'] is None:
+                result['timestamps'] = sampled_wave.time.tolist()
+            else:
+                assert result['timestamps'] is None or np.array_equal(
+                    sampled_wave.time, result['timestamps']
+                ), 'Sampled timestamps mismatch'
+        
+        if len(result['values']) == 1 and '' in result['values']:
+            result['values'] = result['values']['']
+        
+        return result
