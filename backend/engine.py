@@ -84,24 +84,84 @@ class AnalysisEngine:
             self.reader.__exit__(None, None, None)
             self.reader = None
 
-    def analyze(self, transform_code: str) -> dict[str, Any]:
+    def analyze(self, transform_code: str, sample_rate: int = 1) -> dict[str, Any]:
         context: dict[str, Any] = {'timestamps': None}
         processed_data = execute_transform(self.reader, transform_code, context)
 
-        if isinstance(processed_data, pd.DataFrame):
-            timestamps = context.get('timestamps')
-            if timestamps is None:
-                raise RuntimeError('Waveform timestamps are required but missing')
-            if len(timestamps) != len(processed_data):
-                raise RuntimeError('Waveform timestamps length mismatch')
-            timestamp_list = timestamps.tolist()
-            values: dict[str, list[Any]] = {}
-            for column in processed_data.columns:
-                series = processed_data[column]
-                values[column] = [
-                    value.item() if isinstance(value, np.generic) else value
-                    for value in series.to_list()
-                ]
-            return {'timestamps': timestamp_list, 'values': values}
+        if _is_waveform(processed_data):
+            timestamps, values = _process_waveform(processed_data, sample_rate)
+            key = getattr(processed_data, 'name', None) or 'value'
+            return {'timestamps': timestamps.tolist(), 'values': {key: values.tolist()}}
+
+        if isinstance(processed_data, dict):
+            if not processed_data:
+                return {'timestamps': [], 'values': {}}
+            normalized_rate = max(int(sample_rate or 1), 1)
+            first_key = next(iter(processed_data.keys()))
+            first_wave = processed_data[first_key]
+            if not _is_waveform(first_wave):
+                raise RuntimeError('Expected Waveform values in result dict')
+            first_timestamps = _to_float_array(first_wave.time)
+            timestamps = (
+                _downsample_values(first_timestamps, normalized_rate)
+                if normalized_rate > 1
+                else first_timestamps
+            )
+            values: dict[str, list[float]] = {}
+            for key, wave in processed_data.items():
+                if not _is_waveform(wave):
+                    raise RuntimeError('Expected Waveform values in result dict')
+                wave_timestamps = _to_float_array(wave.time)
+                if wave_timestamps.shape[0] != first_timestamps.shape[0]:
+                    raise RuntimeError('Waveform timestamps length mismatch')
+                if not np.array_equal(wave_timestamps, first_timestamps):
+                    raise RuntimeError('Waveform timestamps mismatch')
+                wave_values = _to_float_array(wave.value)
+                if wave_values.shape[0] != first_timestamps.shape[0]:
+                    raise RuntimeError('Waveform values length mismatch')
+                if normalized_rate > 1:
+                    wave_values = _downsample_values(wave_values, normalized_rate)
+                values[key] = wave_values.tolist()
+            return {'timestamps': timestamps.tolist(), 'values': values}
 
         return {'timestamps': [], 'values': {}}
+
+
+def _to_float_array(values: Any) -> np.ndarray:
+    if isinstance(values, np.ndarray):
+        return values.astype(float, copy=False)
+    return np.asarray(values, dtype=float)
+
+
+def _is_waveform(value: Any) -> bool:
+    return hasattr(value, 'time') and hasattr(value, 'value')
+
+
+def _process_waveform(wave: Any, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+    normalized_rate = max(int(sample_rate or 1), 1)
+    timestamps = _to_float_array(wave.time)
+    values = _to_float_array(wave.value)
+    if timestamps.shape[0] != values.shape[0]:
+        raise RuntimeError('Waveform timestamps length mismatch')
+    if normalized_rate > 1:
+        timestamps = _downsample_values(timestamps, normalized_rate)
+        values = _downsample_values(values, normalized_rate)
+    return timestamps, values
+
+
+def _downsample_values(data: np.ndarray, rate: int) -> np.ndarray:
+    if rate <= 1:
+        return data.astype(float, copy=False)
+    length = data.shape[0]
+    if length == 0:
+        return data.astype(float, copy=False)
+    trimmed = (length // rate) * rate
+    if trimmed > 0:
+        head = data[:trimmed].reshape(-1, rate)
+        head_mean = np.nanmean(head, axis=1)
+    else:
+        head_mean = np.empty((0,), dtype=float)
+    if trimmed < length:
+        tail_mean = np.nanmean(data[trimmed:])
+        return np.concatenate([head_mean, np.array([tail_mean], dtype=float)])
+    return head_mean

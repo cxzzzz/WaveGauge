@@ -20,6 +20,7 @@ app.add_middleware(
 class AnalyzeRequest(BaseModel):
     file_path: str
     transform_code: str = ""
+    sample_rate: int = 1
 
 
 engines: dict[str, AnalysisEngine] = {}
@@ -36,8 +37,9 @@ def get_engine(file_path: str) -> AnalysisEngine:
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
     try:
+        print(req)
         engine = get_engine(req.file_path)
-        table_data = engine.analyze(req.transform_code)
+        table_data = engine.analyze(req.transform_code, req.sample_rate)
 
         return {
             "status": "success",

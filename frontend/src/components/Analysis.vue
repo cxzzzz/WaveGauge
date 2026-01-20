@@ -241,7 +241,6 @@ type AnalysisCore = {
 
 type AnalysisContext = {
   history?: Array<{ step: string | number; [key: string]: any }>;
-  wavePath?: string;
   baselineHistory?: Array<{ step: string | number; [key: string]: any }>;
   tabId?: string;
 };
@@ -249,7 +248,6 @@ type AnalysisContext = {
 const props = defineProps<{
   core: AnalysisCore;
   context?: AnalysisContext;
-  isBaseline?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -340,14 +338,25 @@ const summaryValue = computed(() => {
 });
 const hasResult = computed(() => summaryValue.value !== undefined);
 const value = computed(() => summaryValue.value);
-const wavePath = computed(() => contextModel.value.wavePath);
+const wavePath = computed(() => {
+  if (!tabId.value) return '';
+  return analysisStore.getWavePath(tabId.value);
+});
+const sampleRate = computed(() => {
+  if (!tabId.value) return 1;
+  return analysisStore.getSampleRate(tabId.value);
+});
+const isBaseline = computed(() => {
+  if (!tabId.value) return false;
+  return analysisStore.baselineTabId === tabId.value;
+});
 
 const isMultiValue = computed(() => {
   return typeof value.value === 'object' && value.value !== null;
 });
 
 const hasBaselineComparison = computed(() => {
-  if (props.isBaseline) return false;
+  if (isBaseline.value) return false;
   return baselineHistoryData.value.length > 0;
 });
 const baselineHistoryData = computed(() => contextModel.value.baselineHistory ?? []);
@@ -471,7 +480,8 @@ const runAnalysis = async () => {
   try {
     const response = await axios.post(`${API_URL}/analyze`, {
       file_path: wavePath.value,
-      transform_code: transformCode.value
+      transform_code: transformCode.value,
+      sample_rate: sampleRate.value
     });
 
     if (response.data.status === 'success') {

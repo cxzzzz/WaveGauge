@@ -102,10 +102,8 @@
             :node-id="child.id"
             v-model:core="child.core"
             :context="{
-              wavePath: contextModel.wavePath,
               groupPath: buildGroupPath(groupPathModel, child.core?.name ?? ''),
               baselineMap: contextModel.baselineMap,
-              isBaseline: contextModel.isBaseline,
               tabId: contextModel.tabId
             }"
             :ref="(el: any) => setChildRef(el, child.id)"
@@ -117,7 +115,6 @@
             v-model:core="child.core"
             :context="buildAnalysisContext(child)"
             @update:context="(val) => updateChildContext(child.id, val)"
-            :is-baseline="contextModel.isBaseline"
             @delete="deleteChild(index)"
           />
         </template>
@@ -160,10 +157,8 @@ type GroupCore = {
 };
 
 type GroupContext = {
-  wavePath?: string;
   groupPath?: string;
   baselineMap?: Record<string, { history: any[] | undefined }>;
-  isBaseline?: boolean;
   tabId?: string;
 };
 
@@ -214,7 +209,6 @@ const baselineEntryFor = (analysisName: string) => {
 };
 const buildAnalysisContext = (child: any) => ({
   ...(child.context ?? {}),
-  wavePath: contextModel.value.wavePath,
   baselineHistory: baselineEntryFor(child.core?.name)?.history,
   tabId: contextModel.value.tabId
 });

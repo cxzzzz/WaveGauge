@@ -22,10 +22,20 @@
       <div class="flex items-center gap-2 mb-2">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Waveform Path</span>
         <a-input
-          v-model:value="tab.path"
+          :value="analysisStore.getWavePath(tab.id)"
+          @update:value="analysisStore.setWavePath(tab.id, $event)"
           size="small"
           placeholder="Enter waveform file path"
           class="!text-xs"
+        />
+        <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Sample Every (cycles)</span>
+        <a-input-number
+          :value="analysisStore.getSampleRate(tab.id)"
+          @update:value="analysisStore.setSampleRate(tab.id, $event)"
+          size="small"
+          :min="1"
+          :step="1"
+          class="!text-xs w-[120px]"
         />
         <a-button size="small" @click="analysisStore.setBaselineTab(tab.id)">
           {{ analysisStore.baselineTabId === tab.id ? 'Unset' : 'Set Baseline' }}
@@ -35,10 +45,8 @@
         :node-id="tab.rootGroup.id"
         v-model:core="tab.rootGroup.core"
         :context="{
-          wavePath: tab.path,
           baselineMap,
           groupPath: '',
-          isBaseline: analysisStore.baselineTabId === tab.id,
           tabId: tab.id
         }"
         :is-root="true"
@@ -54,7 +62,6 @@ import { useAnalysisStore } from '../stores/analysis';
 
 type WaveformTab = {
   id: string;
-  path: string;
   rootGroup: any;
 };
 
@@ -134,7 +141,6 @@ const createRootGroup = () => ({
 const waveformTabs = ref<WaveformTab[]>([
   {
     id: 'waveform-1',
-    path: '/home/cxzzzz/Programming/hardware/WaveGauge/backend/sample.vcd',
     rootGroup: createRootGroup()
   }
 ]);
@@ -142,6 +148,8 @@ const analysisStore = useAnalysisStore();
 const firstTab = waveformTabs.value[0];
 if (firstTab) {
   analysisStore.ensureTab(firstTab.id);
+  analysisStore.setWavePath(firstTab.id, '/home/cxzzzz/Programming/hardware/WaveGauge/backend/sample.vcd');
+  analysisStore.setSampleRate(firstTab.id, 1);
   if (!analysisStore.baselineTabId) {
     analysisStore.setBaselineTab(firstTab.id);
   }
@@ -159,7 +167,7 @@ const tabNames = computed(() => {
   const counts: Record<string, number> = {};
   const result: Record<string, string> = {};
   waveformTabs.value.forEach((tab) => {
-    const base = getBaseName(tab.path);
+    const base = getBaseName(analysisStore.getWavePath(tab.id));
     const count = counts[base] ?? 0;
     counts[base] = count + 1;
     result[tab.id] = count === 0 ? base : `${base}-${count}`;
@@ -202,10 +210,11 @@ const addWaveformTab = () => {
   nextTabIndex.value += 1;
   waveformTabs.value.push({
     id,
-    path: '',
     rootGroup: createRootGroup()
   });
   analysisStore.ensureTab(id);
+  analysisStore.setWavePath(id, '');
+  analysisStore.setSampleRate(id, 1);
   activeTabId.value = id;
 };
 
