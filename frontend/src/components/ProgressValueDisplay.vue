@@ -123,7 +123,10 @@ const baselineRatioText = computed(() => {
   if (!Number.isFinite(baseline) || !(effectiveMax.value > 0)) return '(--)';
   return `(${baselinePercent.value.toFixed(1)}%)`;
 });
-const delta = computed(() => calcDelta(currentValue.value, baselineValue.value));
+const delta = computed(() => {
+  if (!hasBaseline.value) return 0;
+  return calcDelta(currentValue.value, baselineValue.value);
+});
 const deltaPercentText = computed(() => {
   if (delta.value === 'pos_inf') return '(+∞)';
   if (delta.value === 'neg_inf') return '(-∞)';

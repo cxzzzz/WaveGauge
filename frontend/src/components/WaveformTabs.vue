@@ -24,7 +24,6 @@
         <a-input
           :value="tabState(tab.id).wavePath"
           @update:value="tabState(tab.id).wavePath = $event"
-          size="small"
           placeholder="Enter waveform file path"
           class="!text-xs"
         />

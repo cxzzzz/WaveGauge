@@ -42,13 +42,13 @@
           <template #overlay>
             <a-menu>
               <a-menu-item key="add-analysis" @click="addAnalysis">
-                <file-add-outlined /> Add Analysis
+                <line-chart-outlined /> Add Analysis
               </a-menu-item>
               <a-menu-item key="add-group" @click="addGroup">
-                <folder-add-outlined /> Add Group
+                <folder-add-outlined /> Add SubGroup
               </a-menu-item>
               <a-menu-item key="run-all" @click="runAllAnalyses">
-                <play-circle-outlined /> Run All Analyses
+                <play-circle-outlined /> Run Analyses
               </a-menu-item>
               <a-menu-divider />
               <a-menu-item key="export" @click="exportGroup">
@@ -65,7 +65,7 @@
           </template>
         </a-dropdown>
         
-        <div class="text-gray-500 dark:text-[#aaa] text-[10px] ml-1">
+        <div class="text-gray-500 dark:text-[#aaa] text-[10px] ml-1" @click="toggleCollapse">
             <down-outlined v-if="!localCollapsed" />
             <right-outlined v-else />
         </div>
@@ -133,6 +133,7 @@ import {
   FolderOpenOutlined, 
   HolderOutlined, 
   MoreOutlined, 
+  LineChartOutlined,
   FileAddOutlined, 
   FolderAddOutlined, 
   DownloadOutlined, 

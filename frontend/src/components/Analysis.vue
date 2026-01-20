@@ -90,7 +90,7 @@
                 <a-menu-item key="code" @click="expanded = !expanded">
                   <code-outlined v-if="!expanded" />
                   <up-outlined v-else />
-                  {{ expanded ? 'Hide Logic' : 'Show Logic' }}
+                  {{ expanded ? 'Hide Settings' : 'Show Settings' }}
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="delete" danger @click="$emit('delete')">
@@ -107,14 +107,6 @@
       {{ errorMessage }}
     </div>
 
-    <div v-if="showTimeline" class="p-1.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
-      <div v-if="hasBaselineComparison" class="w-full aspect-[16/5] grid grid-rows-2 gap-1">
-        <div ref="chartRef" class="w-full h-full"></div>
-        <div ref="baselineChartRef" class="w-full h-full"></div>
-      </div>
-      <div v-else ref="chartRef" class="w-full aspect-[16/5]"></div>
-    </div>
-
     <!-- Multi-Value List -->
     <div v-if="isMultiValue" class="px-1.5 py-0.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
       <div v-for="item in displayItems" :key="item.key" class="flex justify-between items-center py-0.5">
@@ -129,6 +121,14 @@
           />
         </div>
       </div>
+    </div>
+
+    <div v-if="showTimeline" class="p-1.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a] transition-colors duration-300">
+      <div v-if="hasBaselineComparison" class="w-full aspect-[16/5] grid grid-rows-2 gap-1">
+        <div ref="chartRef" class="w-full h-full"></div>
+        <div ref="baselineChartRef" class="w-full h-full"></div>
+      </div>
+      <div v-else ref="chartRef" class="w-full aspect-[16/5]"></div>
     </div>
 
     <!-- Body: Logic Editor (Collapsible) -->
