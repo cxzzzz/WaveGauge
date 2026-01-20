@@ -37,9 +37,15 @@
           :step="1"
           class="!text-xs w-[120px]"
         />
-        <a-button size="small" @click="analysisStore.toggleBaselineTab(tab.id)">
-          {{ analysisStore.baselineTabId === tab.id ? 'Unset' : 'Set Baseline' }}
-        </a-button>
+        <div class="flex items-center gap-1">
+          <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Baseline</span>
+          <a-switch
+            :checked="analysisStore.baselineTabId === tab.id"
+            un-checked-children=""
+            size="small"
+            @change="analysisStore.toggleBaselineTab(tab.id)"
+          />
+        </div>
       </div>
       <AnalysisGroup 
         :node-id="tab.rootGroup.id"
