@@ -16,7 +16,7 @@
         <div v-if="isEditingName" class="flex-1" @click.stop>
           <a-input 
             ref="nameInput"
-            v-model:value="element.name" 
+            v-model:value="localName" 
             size="small" 
             @blur="saveName" 
             @pressEnter="saveName"
@@ -29,7 +29,7 @@
           @dblclick.stop="startEditing" 
           class="font-bold text-xs text-gray-800 dark:text-[#f0f0f0] truncate"
         >
-          {{ element.name }}
+          {{ groupName }}
         </span>
         <edit-outlined v-if="!isEditingName" class="text-xs text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity ml-1" @click.stop="startEditing" />
       </div>
@@ -87,7 +87,7 @@
       class="bg-gray-50 dark:bg-[#181818] border-t border-gray-200 dark:border-[#333]"
     >
       <draggable 
-        :list="element.children" 
+        :list="childrenModel" 
         item-key="id"
         group="analysis" 
         animation="200"
@@ -97,27 +97,27 @@
         class="p-1 flex flex-col gap-0.5 min-h-[24px]"
       >
         <template #item="{ element: child, index }">
-          <component 
-            :is="child.type === 'group' ? 'AnalysisGroup' : Analysis" 
-            :element="child"
-            :wave-path="wavePath"
+          <AnalysisGroup
+            v-if="child.type === 'group'"
+            :node-id="child.id"
+            v-model:core="child.core"
+            :context="{
+              wavePath: contextModel.wavePath,
+              groupPath: buildGroupPath(groupPathModel, child.core?.name ?? ''),
+              baselineMap: contextModel.baselineMap,
+              isBaseline: contextModel.isBaseline,
+              tabId: contextModel.tabId
+            }"
             :ref="(el: any) => setChildRef(el, child.id)"
-            v-model:zoomStart="zoomStartModel"
-            v-model:zoomEnd="zoomEndModel"
-            v-model:chartType="child.chartType"
-            v-model:summaryType="child.summaryType"
-            v-model:maxValue="child.maxValue"
-            v-model:name="child.name"
-            v-model:description="child.description"
-            v-model:metricCode="child.metricCode"
-            v-model:transformCode="child.transformCode"
-            v-model:result="child.result"
-            v-model:history="child.history"
-            :group-path="child.type === 'group' ? buildGroupPath(groupPathModel, child.name) : groupPathModel"
-            :baseline-map="baselineMap"
-            :is-baseline="isBaseline"
-            :baseline-result="child.type === 'analysis' ? baselineEntryFor(child.name)?.result : undefined"
-            :baseline-history="child.type === 'analysis' ? baselineEntryFor(child.name)?.history : undefined"
+            @delete="deleteChild(index)"
+          />
+          <Analysis
+            v-else
+            :ref="(el: any) => setChildRef(el, child.id)"
+            v-model:core="child.core"
+            :context="buildAnalysisContext(child)"
+            @update:context="(val) => updateChildContext(child.id, val)"
+            :is-baseline="contextModel.isBaseline"
             @delete="deleteChild(index)"
           />
         </template>
@@ -153,37 +153,54 @@ defineOptions({
   name: 'AnalysisGroup'
 });
 
-const props = defineProps<{
-  element: any;
-  isRoot?: boolean;
+type GroupCore = {
+  name: string;
+  collapsed?: boolean;
+  children?: any[];
+};
+
+type GroupContext = {
   wavePath?: string;
-  zoomStart?: number;
-  zoomEnd?: number;
   groupPath?: string;
+  baselineMap?: Record<string, { history: any[] | undefined }>;
   isBaseline?: boolean;
-  baselineMap?: Record<string, { result: any; history: any[] | undefined }>;
+  tabId?: string;
+};
+
+const props = defineProps<{
+  nodeId?: string;
+  core: GroupCore;
+  context?: GroupContext;
+  isRoot?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'delete'): void;
-  (e: 'update:zoomStart', val: number): void;
-  (e: 'update:zoomEnd', val: number): void;
+  (e: 'update:core', val: GroupCore): void;
 }>();
 
-const localCollapsed = ref(props.element.collapsed || false);
+const coreModel = computed({
+  get: () => props.core,
+  set: (val: GroupCore) => emit('update:core', val)
+});
+const contextModel = computed(() => props.context ?? {});
+const updateCore = (patch: Partial<GroupCore>) => {
+  emit('update:core', { ...props.core, ...patch });
+};
+
+const childrenModel = computed({
+  get: () => coreModel.value.children ?? [],
+  set: (val: any[]) => updateCore({ children: val })
+});
+
+const localCollapsed = ref(coreModel.value.collapsed ?? false);
+const groupName = computed(() => coreModel.value.name);
+const localName = ref(groupName.value);
 const fileInput = ref<HTMLInputElement | null>(null);
 const isEditingName = ref(false);
 const nameInput = ref<any>(null);
 const childRefs = ref(new Map<string, any>());
-const zoomStartModel = computed({
-  get: () => props.zoomStart ?? 0,
-  set: (val: number) => emit('update:zoomStart', val)
-});
-const zoomEndModel = computed({
-  get: () => props.zoomEnd ?? 100,
-  set: (val: number) => emit('update:zoomEnd', val)
-});
-const groupPathModel = computed(() => props.groupPath ?? '');
+const groupPathModel = computed(() => contextModel.value.groupPath ?? '');
 const buildGroupPath = (parentPath: string, groupName: string) => {
   if (!groupName) return parentPath;
   return parentPath ? `${parentPath}/${groupName}` : groupName;
@@ -193,8 +210,41 @@ const buildSignature = (groupPath: string, analysisName: string) => {
 };
 const baselineEntryFor = (analysisName: string) => {
   const signature = buildSignature(groupPathModel.value, analysisName ?? '');
-  return props.baselineMap?.[signature];
+  return contextModel.value.baselineMap?.[signature];
 };
+const buildAnalysisContext = (child: any) => ({
+  ...(child.context ?? {}),
+  wavePath: contextModel.value.wavePath,
+  baselineHistory: baselineEntryFor(child.core?.name)?.history,
+  tabId: contextModel.value.tabId
+});
+const updateChildContext = (childId: string, val: any) => {
+  const next = childrenModel.value.map((child: any) => {
+    if (child.id !== childId) return child;
+    return {
+      ...child,
+      context: {
+        ...(child.context ?? {}),
+        ...val
+      }
+    };
+  });
+  updateCore({ children: next });
+};
+
+watch(
+  () => coreModel.value.children,
+  (val) => {
+    if (!Array.isArray(val)) {
+      updateCore({ children: [] });
+    }
+  },
+  { immediate: true }
+);
+
+watch(groupName, (val) => {
+  localName.value = val;
+});
 
 const startEditing = () => {
   isEditingName.value = true;
@@ -205,46 +255,60 @@ const startEditing = () => {
 
 const toggleCollapse = () => {
   localCollapsed.value = !localCollapsed.value;
-  // Update the model if needed, but local state is fine for UI toggle
-  props.element.collapsed = localCollapsed.value;
+  updateCore({ collapsed: localCollapsed.value });
 };
 
 const saveName = () => {
   isEditingName.value = false;
+  if (localName.value !== groupName.value) {
+    updateCore({ name: localName.value });
+  }
 };
 
-watch(() => props.element.collapsed, (val) => {
-  localCollapsed.value = val;
+watch(() => coreModel.value.collapsed, (val) => {
+  localCollapsed.value = val ?? false;
 });
 
 const deleteChild = (index: number) => {
-  props.element.children.splice(index, 1);
+  const next = [...childrenModel.value];
+  next.splice(index, 1);
+  updateCore({ children: next });
 };
 
 const addAnalysis = () => {
-  props.element.children.push({
+  const next = [...childrenModel.value];
+  next.push({
     id: uuidv4(),
     type: 'analysis',
-    name: 'New Analysis',
-    description: '',
-    metricCode: '# Calculate metric\n# Return a value\nreturn 0',
-    transformCode: '# Transform data\n# data = ...',
-    chartType: 'line',
-    summaryType: 'avg',
-    maxValue: undefined
+    core: {
+      name: 'New Analysis',
+      description: '',
+      transformCode: '# Transform data\n# data = ...',
+      chartType: 'line',
+      summaryType: 'avg',
+      maxValue: undefined
+    },
+    context: {
+      history: []
+    }
   });
+  updateCore({ children: next });
   // Auto expand if collapsed
   if (localCollapsed.value) toggleCollapse();
 };
 
 const addGroup = () => {
-  props.element.children.push({
+  const next = [...childrenModel.value];
+  next.push({
     id: uuidv4(),
     type: 'group',
-    name: 'New Group',
-    collapsed: false,
-    children: []
+    core: {
+      name: 'New Group',
+      collapsed: false,
+      children: []
+    }
   });
+  updateCore({ children: next });
   if (localCollapsed.value) toggleCollapse();
 };
 
@@ -258,7 +322,7 @@ const setChildRef = (el: any, id: string) => {
 };
 
 const runAllAnalyses = async () => {
-  for (const child of props.element.children) {
+  for (const child of childrenModel.value) {
     const refInstance = childRefs.value.get(child.id);
     if (child.type === 'group') {
       await refInstance?.runAllAnalyses?.();
@@ -276,9 +340,18 @@ const cleanExportData = (data: any): any => {
   if (Array.isArray(data)) {
     return data.map(cleanExportData);
   } else if (typeof data === 'object' && data !== null) {
-    const { result, history, ...rest } = data;
-    if (rest.children) {
-      rest.children = cleanExportData(rest.children);
+    const { context, ...rest } = data;
+    const children = rest.children ?? rest.core?.children;
+    if (children) {
+      if (rest.children) {
+        rest.children = cleanExportData(children);
+      }
+      if (rest.core?.children) {
+        rest.core = {
+          ...rest.core,
+          children: cleanExportData(children)
+        };
+      }
     }
     return rest;
   }
@@ -286,17 +359,25 @@ const cleanExportData = (data: any): any => {
 };
 
 const exportGroup = () => {
+  const groupData = {
+    id: props.nodeId ?? 'group',
+    type: 'group',
+    core: {
+      ...props.core,
+      children: childrenModel.value
+    }
+  };
   const data = JSON.stringify({
     version: '1.0',
     type: 'wavegauge_export',
-    data: cleanExportData(props.element)
+    data: cleanExportData(groupData)
   }, null, 2);
   
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${props.element.name.replace(/\s+/g, '_')}_export.json`;
+  a.download = `${groupName.value.replace(/\s+/g, '_')}_export.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -319,35 +400,52 @@ const handleImport = (event: Event) => {
       const json = JSON.parse(content);
       
       if (json.version && json.data) {
-        // Basic validation
-        // Check if we are importing a group or list of items?
-        // If imported item is a group, we can add it as a child.
-        // Or if user wants to merge content? User said "Importing keeps parts already added", implies merging/appending.
-        
         const importedData = json.data;
-        
-        // If imported data is a group (has children), do we add the group itself or its children?
-        // Let's treat it as: we add the imported object to our children.
-        // But if we exported THIS group, we get a group object. If we import it back, we probably want to add it as a subgroup?
-        // Or should we assume we are importing *into* the current group?
-        // If I export "Memory Subsystem", I get a JSON for that group.
-        // If I import it into "GPU Analysis", I expect "Memory Subsystem" to appear inside "GPU Analysis".
-        // That seems correct.
-        
-        // However, we should regenerate IDs to avoid conflicts?
-        // For now, let's keep IDs but maybe warn or just append.
-        // Ideally we should deep clone and regenerate IDs.
-        
+
         const processImportedItem = (item: any) => {
-            // Simple ID regeneration
-            item.id = uuidv4();
-            if (item.children) {
-                item.children.forEach(processImportedItem);
+          item.id = uuidv4();
+          if (item.type === 'analysis') {
+            if (!item.core) {
+              item.core = {
+                name: item.name ?? 'Analysis',
+                transformCode: item.transformCode,
+                description: item.description,
+                chartType: item.chartType,
+                summaryType: item.summaryType,
+                maxValue: item.maxValue
+              };
             }
+            item.context = { ...(item.context ?? {}), history: item.context?.history ?? item.history ?? [] };
+            delete item.name;
+            delete item.transformCode;
+            delete item.description;
+            delete item.chartType;
+            delete item.summaryType;
+            delete item.maxValue;
+            delete item.history;
+            delete item.state;
+            return;
+          }
+          if (item.type === 'group') {
+            if (!item.core) {
+              item.core = { name: item.name ?? 'Group' };
+            }
+            const children = item.core?.children ?? item.state?.children ?? item.children ?? [];
+            item.core = {
+              ...item.core,
+              collapsed: item.core?.collapsed ?? item.state?.collapsed ?? item.collapsed ?? false,
+              children
+            };
+            delete item.name;
+            delete item.collapsed;
+            delete item.children;
+            delete item.state;
+            item.core.children.forEach(processImportedItem);
+          }
         };
         
         processImportedItem(importedData);
-        props.element.children.push(importedData);
+        updateCore({ children: [...childrenModel.value, importedData] });
         message.success('Import successful');
         
         if (localCollapsed.value) toggleCollapse();

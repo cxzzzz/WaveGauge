@@ -24,67 +24,7 @@
       <div class="flex items-center gap-2">
         <template v-if="!isMultiValue">
           <template v-for="item in displayItems" :key="item.key">
-            <template v-if="item.hasBaseline">
-              <a-popover placement="bottomRight">
-                <template #content>
-                  <div class="flex flex-col gap-1.5">
-                    <div class="flex items-center justify-between gap-3">
-                      <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Current</span>
-                      <div class="flex items-center gap-2">
-                        <div class="w-[70px]">
-                          <a-progress
-                            :percent="item.currentPercent"
-                            :stroke-color="item.currentColor"
-                            :show-info="false"
-                            size="small"
-                          />
-                        </div>
-                        <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.currentText }}</span>
-                      </div>
-                    </div>
-                    <div class="flex items-center justify-between gap-3">
-                      <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Baseline</span>
-                      <div class="flex items-center gap-2">
-                        <div class="w-[70px]">
-                          <a-progress
-                            :percent="item.baselinePercent"
-                            :stroke-color="item.baselineColor"
-                            :show-info="false"
-                            size="small"
-                          />
-                        </div>
-                        <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.baselineText }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-                <div class="flex items-center gap-0.5">
-                  <div class="w-[64px]">
-                    <a-progress 
-                      :percent="item.currentPercent"
-                      :stroke-color="item.currentColor"
-                      :show-info="false"
-                      size="small" 
-                    />
-                  </div>
-                  <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ item.currentText }}</span>
-                  <span :class="item.deltaPercentClass" class="text-[10px] font-semibold min-w-[40px] text-right">
-                    {{ item.deltaPercentText }}
-                  </span>
-                </div>
-              </a-popover>
-            </template>
-            <template v-else>
-              <div class="w-[64px]">
-                <a-progress 
-                  :percent="item.currentPercent"
-                  :stroke-color="item.currentColor"
-                  :show-info="false"
-                  size="small" 
-                />
-              </div>
-              <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[35px] text-right text-xs">{{ item.currentText }}</span>
-            </template>
+            <ProgressValueDisplay :item="item" value-width-class="w-[35px]" />
           </template>
         </template>
         
@@ -109,7 +49,7 @@
                 <div class="mb-2 font-bold text-xs">Description</div>
                 <a-textarea 
                   :value="description" 
-                  @update:value="$emit('update:description', $event)" 
+                  @update:value="updateCore({ description: $event })" 
                   placeholder="Add a description for this metric..." 
                   :rows="3"
                   class="!text-xs mb-2"
@@ -174,67 +114,7 @@
       <div v-for="item in displayItems" :key="item.key" class="flex justify-between items-center py-0.5">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ item.label }}</span>
         <div class="flex items-center gap-2">
-          <template v-if="item.hasBaseline">
-            <a-popover placement="bottomRight">
-              <template #content>
-                <div class="flex flex-col gap-1.5">
-                  <div class="flex items-center justify-between gap-3">
-                    <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Current</span>
-                    <div class="flex items-center gap-2">
-                      <div class="w-[70px]">
-                        <a-progress
-                          :percent="item.currentPercent"
-                          :stroke-color="item.currentColor"
-                          :show-info="false"
-                          size="small"
-                        />
-                      </div>
-                      <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.currentText }}</span>
-                    </div>
-                  </div>
-                  <div class="flex items-center justify-between gap-3">
-                    <span class="text-xs text-gray-500 dark:text-[#a0a0a0]">Baseline</span>
-                    <div class="flex items-center gap-2">
-                      <div class="w-[70px]">
-                        <a-progress
-                          :percent="item.baselinePercent"
-                          :stroke-color="item.baselineColor"
-                          :show-info="false"
-                          size="small"
-                        />
-                      </div>
-                      <span class="text-gray-600 dark:text-[#c0c0c0] font-mono text-xs w-[50px] text-right">{{ item.baselineText }}</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-              <div class="flex items-center gap-0.5">
-                <div class="w-[64px]">
-                  <a-progress 
-                    :percent="item.currentPercent"
-                    :stroke-color="item.currentColor"
-                    :show-info="false"
-                    size="small" 
-                  />
-                </div>
-                <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[48px] text-right text-xs">{{ item.currentText }}</span>
-                <span :class="item.deltaPercentClass" class="text-[10px] font-semibold min-w-[40px] text-right">
-                  {{ item.deltaPercentText }}
-                </span>
-              </div>
-            </a-popover>
-          </template>
-          <template v-else>
-            <div class="w-[64px]">
-               <a-progress 
-                :percent="item.currentPercent"
-                :stroke-color="item.currentColor"
-                :show-info="false"
-                size="small" 
-              />
-            </div>
-            <span class="text-gray-500 dark:text-[#a0a0a0] font-mono w-[48px] text-right text-xs">{{ item.currentText }}</span>
-          </template>
+          <ProgressValueDisplay :item="item" value-width-class="w-[48px]" />
         </div>
       </div>
     </div>
@@ -287,7 +167,7 @@
         <div class="border border-gray-200 dark:border-[#303030] rounded-sm overflow-hidden flex flex-col">
           <Codemirror
             :model-value="transformCode"
-            @update:model-value="$emit('update:transformCode', $event)"
+            @update:model-value="updateCore({ transformCode: $event })"
             placeholder="# Enter logic to process raw waveforms..."
             :style="{ height: transformEditorHeight + 'px' }"
             :autofocus="false"
@@ -333,44 +213,55 @@ import { python } from '@codemirror/lang-python';
 import { oneDark } from '@codemirror/theme-one-dark';
 import axios from 'axios';
 import { message } from 'ant-design-vue';
+import ProgressValueDisplay from './ProgressValueDisplay.vue';
+import { useAnalysisStore } from '../stores/analysis';
 
 const API_URL = 'http://localhost:8000/api';
 
-const props = defineProps<{
+type AnalysisCore = {
   name: string;
-  metricCode: string;
   transformCode?: string;
   description?: string;
-  result?: number | Record<string, number>;
-  history?: Array<{ step: string | number; [key: string]: any }>;
-  wavePath?: string;
-  zoomStart?: number;
-  zoomEnd?: number;
   chartType?: string;
   summaryType?: string;
   maxValue?: number;
-  isBaseline?: boolean;
-  baselineResult?: number | Record<string, number>;
+};
+
+type AnalysisContext = {
+  history?: Array<{ step: string | number; [key: string]: any }>;
+  wavePath?: string;
   baselineHistory?: Array<{ step: string | number; [key: string]: any }>;
+  tabId?: string;
+};
+
+const props = defineProps<{
+  core: AnalysisCore;
+  context?: AnalysisContext;
+  isBaseline?: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:metricCode', val: string): void;
-  (e: 'update:transformCode', val: string): void;
-  (e: 'update:name', val: string): void;
-  (e: 'update:description', val: string): void;
-  (e: 'update:result', val: number | Record<string, number> | undefined): void;
-  (e: 'update:history', val: Array<{ step: string | number; [key: string]: any }>): void;
-  (e: 'update:zoomStart', val: number): void;
-  (e: 'update:zoomEnd', val: number): void;
-  (e: 'update:chartType', val: string): void;
-  (e: 'update:summaryType', val: string): void;
-  (e: 'update:maxValue', val: number | undefined): void;
+  (e: 'update:core', val: AnalysisCore): void;
+  (e: 'update:context', val: AnalysisContext): void;
   (e: 'delete'): void;
 }>();
 
+const coreModel = computed({
+  get: () => props.core,
+  set: (val: AnalysisCore) => emit('update:core', val)
+});
+const contextModel = computed(() => props.context ?? {});
+const updateCore = (patch: Partial<AnalysisCore>) => {
+  emit('update:core', { ...props.core, ...patch });
+};
+const updateContext = (patch: Partial<AnalysisContext>) => {
+  emit('update:context', { ...(props.context ?? {}), ...patch });
+};
+const name = computed(() => coreModel.value.name);
+const description = computed(() => coreModel.value.description ?? '');
+const transformCode = computed(() => coreModel.value.transformCode ?? '');
 const isEditingName = ref(false);
-const localName = ref(props.name);
+const localName = ref(coreModel.value.name);
 const nameInput = ref<HTMLInputElement | null>(null);
 const errorMessage = ref('');
 const chartTypeOptions = [
@@ -387,20 +278,62 @@ const summaryTypeOptions = [
   { label: 'Sum', value: 'sum' }
 ];
 const chartTypeModel = computed({
-  get: () => props.chartType ?? 'line',
-  set: (val: string) => emit('update:chartType', val)
+  get: () => coreModel.value.chartType ?? 'line',
+  set: (val: string) => updateCore({ chartType: val })
 });
 const summaryTypeModel = computed({
-  get: () => props.summaryType ?? 'avg',
-  set: (val: string) => emit('update:summaryType', val)
+  get: () => coreModel.value.summaryType ?? 'avg',
+  set: (val: string) => updateCore({ summaryType: val })
 });
 const maxValueModel = computed({
-  get: () => props.maxValue,
-  set: (val: number | null) => emit('update:maxValue', val === null ? undefined : val ?? undefined)
+  get: () => coreModel.value.maxValue,
+  set: (val: number | null) => updateCore({ maxValue: val === null ? undefined : val ?? undefined })
 });
 
-const hasResult = computed(() => props.result !== undefined);
-const value = computed(() => props.result ?? 0);
+const historyData = computed(() => contextModel.value.history ?? []);
+const analysisStore = useAnalysisStore();
+const tabId = computed(() => contextModel.value.tabId ?? '');
+watch(tabId, (val) => {
+  if (val) {
+    analysisStore.ensureTab(val);
+  }
+}, { immediate: true });
+const zoomStartValue = computed({
+  get: () => {
+    if (!tabId.value) return 0;
+    return analysisStore.getZoomStart(tabId.value);
+  },
+  set: (val: number) => {
+    if (!tabId.value) return;
+    analysisStore.setZoomStart(tabId.value, val);
+  }
+});
+const zoomEndValue = computed({
+  get: () => {
+    if (!tabId.value) return 100;
+    return analysisStore.getZoomEnd(tabId.value);
+  },
+  set: (val: number) => {
+    if (!tabId.value) return;
+    analysisStore.setZoomEnd(tabId.value, val);
+  }
+});
+const summaryValue = computed(() => {
+  if (!historyData.value.length) return undefined;
+  const summaryType = coreModel.value.summaryType ?? 'avg';
+  console.log(zoomStartValue.value, zoomEndValue.value);
+  console.log(getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value));
+  console.log(calculateSummary(
+    getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value),
+    summaryType
+  ));
+  return calculateSummary(
+    getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value),
+    summaryType
+  );
+});
+const hasResult = computed(() => summaryValue.value !== undefined);
+const value = computed(() => summaryValue.value);
 const formatNumber = (val: number) => {
   if (!Number.isFinite(val)) return '--';
   const fixed = val.toFixed(3);
@@ -411,7 +344,7 @@ const formatOptionalNumber = (val: unknown) => {
   if (!Number.isFinite(num)) return '--';
   return formatNumber(num);
 };
-const historyData = computed(() => props.history ?? []);
+const wavePath = computed(() => contextModel.value.wavePath);
 
 const isMultiValue = computed(() => {
   return typeof value.value === 'object' && value.value !== null;
@@ -419,22 +352,23 @@ const isMultiValue = computed(() => {
 
 const hasBaselineComparison = computed(() => {
   if (props.isBaseline) return false;
-  if (props.baselineHistory && props.baselineHistory.length) return true;
-  return props.baselineResult !== undefined;
+  return baselineHistoryData.value.length > 0;
 });
-const baselineHistoryData = computed(() => props.baselineHistory ?? []);
+const baselineHistoryData = computed(() => contextModel.value.baselineHistory ?? []);
+const baselineZoomStart = ref(zoomStartValue.value);
+const baselineZoomEnd = ref(zoomEndValue.value);
 const baselineSummaryValue = computed(() => {
   if (!hasBaselineComparison.value) return undefined;
-  const summaryType = props.summaryType ?? 'avg';
-  if (baselineHistoryData.value.length) {
-    return calculateSummary(getVisibleHistory(baselineHistoryData.value), summaryType);
-  }
-  return props.baselineResult;
+  const summaryType = coreModel.value.summaryType ?? 'avg';
+  return calculateSummary(
+    getVisibleHistory(baselineHistoryData.value, baselineZoomStart.value, baselineZoomEnd.value),
+    summaryType
+  );
 });
 
 const getMaxForKey = (key: string) => {
-  if (props.maxValue && props.maxValue > 0) return props.maxValue;
-  const visible = getVisibleHistory();
+  if (coreModel.value.maxValue !== undefined) return coreModel.value.maxValue;
+  const visible = getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value);
   let maxVal = 0;
   visible.forEach(item => {
     const v = Number(item[key]);
@@ -442,16 +376,16 @@ const getMaxForKey = (key: string) => {
       if (v > maxVal) maxVal = v;
     }
   });
-  return maxVal > 0 ? maxVal : 1;
+  return maxVal;
 };
 
 const effectiveMax = computed(() => {
-  if (props.maxValue && props.maxValue > 0) return props.maxValue;
-  const visible = getVisibleHistory();
+  if (coreModel.value.maxValue !== undefined) return coreModel.value.maxValue;
+  const visible = getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value);
   const keys = Object.keys(visible[0] ?? {}).filter(k => k !== 'step');
-  if (keys.length !== 1) return 1;
+  if (keys.length !== 1) return 0;
   const key = keys[0];
-  if (!key) return 1;
+  if (!key) return 0;
   let maxVal = 0;
   visible.forEach(item => {
     const v = Number(item[key]);
@@ -459,12 +393,12 @@ const effectiveMax = computed(() => {
       if (v > maxVal) maxVal = v;
     }
   });
-  return maxVal > 0 ? maxVal : 1;
+  return maxVal;
 });
 
 const getMaxValueForDisplay = (key: string) => {
-  if (key === '__single__') return Number(effectiveMax.value) || 1;
-  return Number(getMaxForKey(key)) || 1;
+  if (key === '__single__') return Number(effectiveMax.value) || 0;
+  return Number(getMaxForKey(key)) || 0;
 };
 
 const getBaselineValueForKey = (key: string) => {
@@ -479,6 +413,7 @@ const getBaselineValueForKey = (key: string) => {
 const calcPercent = (val: number | undefined, maxVal: number) => {
   const numeric = Number(val);
   if (!Number.isFinite(numeric)) return 0;
+  if (!(maxVal > 0)) return 0;
   return Math.min(Math.max((numeric / maxVal) * 100, 0), 100);
 };
 
@@ -498,10 +433,10 @@ type DisplayItem = {
   baselineText: string;
   currentPercent: number;
   baselinePercent: number;
-  currentColor: string;
-  baselineColor: string;
   deltaPercentText: string;
   deltaPercentClass: string;
+  maxText: string;
+  currentRatioText: string;
 };
 
 const buildDisplayItem = (
@@ -513,12 +448,6 @@ const buildDisplayItem = (
   const maxVal = getMaxValueForDisplay(key);
   const currentPercent = calcPercent(currentValue, maxVal);
   const baselinePercent = calcPercent(baselineValue, maxVal);
-  const currentColor = Number.isFinite(Number(currentValue))
-    ? getProgressColor(Number(currentValue))
-    : '#d1d5db';
-  const baselineColor = Number.isFinite(Number(baselineValue))
-    ? getProgressColor(Number(baselineValue))
-    : '#d1d5db';
   const delta = calcDelta(currentValue, baselineValue);
   const deltaPercentText =
     delta === 'pos_inf'
@@ -530,15 +459,15 @@ const buildDisplayItem = (
           : `(${delta >= 0 ? '+' : '-'}${Math.abs(delta).toFixed(1)}%)`;
   const deltaPercentClass =
     delta === 'pos_inf'
-      ? 'text-red-500'
+      ? 'text-orange-500'
       : delta === 'neg_inf'
-        ? 'text-green-500'
+        ? 'text-purple-500'
         : delta === undefined
           ? 'text-gray-400 dark:text-[#8a8a8a]'
           : delta > 0
-            ? 'text-red-500'
+            ? 'text-orange-500'
             : delta < 0
-              ? 'text-green-500'
+              ? 'text-purple-500'
               : 'text-gray-400 dark:text-[#8a8a8a]';
   return {
     key,
@@ -548,10 +477,13 @@ const buildDisplayItem = (
     baselineText: formatOptionalNumber(baselineValue),
     currentPercent,
     baselinePercent,
-    currentColor,
-    baselineColor,
     deltaPercentText,
-    deltaPercentClass
+    deltaPercentClass,
+    maxText: formatOptionalNumber(maxVal),
+    currentRatioText:
+      Number.isFinite(Number(currentValue)) && maxVal > 0
+        ? `(${currentPercent.toFixed(1)}%)`
+        : '(--)'
   };
 };
 
@@ -569,7 +501,7 @@ const displayItems = computed<DisplayItem[]>(() => {
   });
 });
 
-watch(() => props.name, (val) => {
+watch(name, (val) => {
   localName.value = val;
 });
 
@@ -581,28 +513,28 @@ const startEditing = async () => {
 
 const saveName = () => {
   isEditingName.value = false;
-  if (localName.value !== props.name) {
-    emit('update:name', localName.value);
+  if (localName.value !== name.value) {
+    updateCore({ name: localName.value });
   }
 };
 
 const runAnalysis = async () => {
   errorMessage.value = '';
-  if (!props.wavePath?.trim()) {
+  if (!wavePath.value?.trim()) {
     message.error('Waveform path is required');
     return;
   }
-  message.loading(`Running analysis for ${props.name}...`, 0);
+  message.loading(`Running analysis for ${name.value}...`, 0);
   
   try {
     const response = await axios.post(`${API_URL}/analyze`, {
-      file_path: props.wavePath,
-      transform_code: props.transformCode
+      file_path: wavePath.value,
+      transform_code: transformCode.value
     });
 
     if (response.data.status === 'success') {
       message.destroy();
-      message.success(`Analysis for ${props.name} completed!`);
+      message.success(`Analysis for ${name.value} completed!`);
       errorMessage.value = '';
       
       // Update history/table data
@@ -619,7 +551,7 @@ const runAnalysis = async () => {
           });
           newHistory.push(entry);
         });
-        emit('update:history', newHistory);
+        updateContext({ history: newHistory });
       } else if (payload && payload.timestamps && payload.values) {
         const timestamps: any[] = payload.timestamps;
         const valuesObj: Record<string, any[]> = payload.values;
@@ -634,7 +566,7 @@ const runAnalysis = async () => {
           });
           newHistory.push(entry);
         }
-        emit('update:history', newHistory);
+        updateContext({ history: newHistory });
       }
       
     } else {
@@ -694,12 +626,6 @@ const extensions = computed(() => {
   return isDark.value ? [python(), oneDark] : [python()];
 });
 
-const getProgressColor = (val: number) => {
-  if (val < 0.5) return '#52c41a'; // Green
-  if (val < 0.8) return '#faad14'; // Yellow
-  return '#ff4d4f'; // Red
-};
-
 const calculateSummary = (
   history: Array<{ step: string | number; [key: string]: any }>,
   summaryType: string
@@ -738,12 +664,12 @@ const calculateSummary = (
 };
 
 const getVisibleHistory = (
-  history: Array<{ step: string | number; [key: string]: any }> = historyData.value
+  history: Array<{ step: string | number; [key: string]: any }> = historyData.value,
+  zoomStart: number = zoomStartValue.value,
+  zoomEnd: number = zoomEndValue.value
 ) => {
   const length = history.length;
   if (!length) return [];
-  const zoomStart = props.zoomStart ?? 0;
-  const zoomEnd = props.zoomEnd ?? 100;
   const startIndex = Math.max(
     0,
     Math.min(length - 1, Math.floor((zoomStart / 100) * (length - 1)))
@@ -754,20 +680,6 @@ const getVisibleHistory = (
   );
   return history.slice(startIndex, endIndex + 1);
 };
-
-const updateSummaryResult = () => {
-  const summaryType = props.summaryType ?? 'avg';
-  const summary = calculateSummary(getVisibleHistory(), summaryType);
-  emit('update:result', summary);
-};
-
-watch(
-  [historyData, () => props.summaryType, () => props.zoomStart, () => props.zoomEnd],
-  () => {
-    updateSummaryResult();
-  },
-  { deep: true, immediate: true }
-);
 
 // Initialize Chart
 const baselineChartRef = ref<HTMLElement | null>(null);
@@ -914,20 +826,22 @@ const buildChartOption = (
 const initCharts = () => {
   if (chartRef.value) {
     chartInstance = echarts.init(chartRef.value);
-    chartInstance.on('datazoom', handleDataZoom);
+    chartInstance.on('datazoom', handleMainDataZoom);
   }
   if (hasBaselineComparison.value && baselineChartRef.value) {
     baselineChartInstance = echarts.init(baselineChartRef.value);
-    baselineChartInstance.on('datazoom', handleDataZoom);
+    baselineChartInstance.on('datazoom', handleBaselineDataZoom);
   }
   updateCharts();
 };
 
 const updateCharts = () => {
   if (!chartInstance && !baselineChartInstance) return;
-  const zoomStart = props.zoomStart ?? 0;
-  const zoomEnd = props.zoomEnd ?? 100;
-  const chartType = props.chartType ?? 'line';
+  const zoomStart = zoomStartValue.value;
+  const zoomEnd = zoomEndValue.value;
+  const baselineStart = baselineZoomStart.value;
+  const baselineEnd = baselineZoomEnd.value;
+  const chartType = coreModel.value.chartType ?? 'line';
   if (chartInstance) {
     if (historyData.value.length) {
       const option = buildChartOption(historyData.value, chartType, zoomStart, zoomEnd, true);
@@ -942,7 +856,7 @@ const updateCharts = () => {
   }
   if (baselineChartInstance) {
     if (baselineHistoryData.value.length) {
-      const option = buildChartOption(baselineHistoryData.value, chartType, zoomStart, zoomEnd, false);
+      const option = buildChartOption(baselineHistoryData.value, chartType, baselineStart, baselineEnd, true);
       isSettingZoom.value = true;
       baselineChartInstance.setOption(option);
       setTimeout(() => {
@@ -954,13 +868,22 @@ const updateCharts = () => {
   }
 };
 
-const handleDataZoom = (event: any) => {
+const handleMainDataZoom = (event: any) => {
   if (isSettingZoom.value) return;
   const payload = event?.batch?.[0] ?? event ?? {};
-  const start = typeof payload.start === 'number' ? payload.start : props.zoomStart ?? 0;
-  const end = typeof payload.end === 'number' ? payload.end : props.zoomEnd ?? 100;
-  emit('update:zoomStart', start);
-  emit('update:zoomEnd', end);
+  const start = typeof payload.start === 'number' ? payload.start : zoomStartValue.value;
+  const end = typeof payload.end === 'number' ? payload.end : zoomEndValue.value;
+  zoomStartValue.value = start;
+  zoomEndValue.value = end;
+};
+
+const handleBaselineDataZoom = (event: any) => {
+  if (isSettingZoom.value) return;
+  const payload = event?.batch?.[0] ?? event ?? {};
+  const start = typeof payload.start === 'number' ? payload.start : baselineZoomStart.value;
+  const end = typeof payload.end === 'number' ? payload.end : baselineZoomEnd.value;
+  baselineZoomStart.value = start;
+  baselineZoomEnd.value = end;
 };
 
 // Watch theme changes
@@ -1003,13 +926,15 @@ watch(showTimeline, async (val) => {
   }
 });
 
-watch(() => props.history, () => {
+watch(historyData, () => {
   if (showTimeline.value) {
     updateCharts();
   }
 }, { deep: true });
 
-watch([() => props.zoomStart, () => props.zoomEnd, () => props.chartType], () => {
+watch(
+  [zoomStartValue, zoomEndValue, baselineZoomStart, baselineZoomEnd, () => coreModel.value.chartType],
+  () => {
   if (showTimeline.value) {
     updateCharts();
   }

@@ -14,7 +14,7 @@
       <template #tab>
         <span class="inline-flex items-center gap-1">
           <span>{{ tabNames[tab.id] }}</span>
-          <a-tag v-if="baselineTabId === tab.id" color="blue" class="!text-[10px] !px-1 !py-0">
+          <a-tag v-if="analysisStore.baselineTabId === tab.id" color="blue" class="!text-[10px] !px-1 !py-0">
             BL
           </a-tag>
         </span>
@@ -27,19 +27,21 @@
           placeholder="Enter waveform file path"
           class="!text-xs"
         />
-        <a-button size="small" @click="toggleBaseline(tab.id)">
-          {{ baselineTabId === tab.id ? 'Unset' : 'Set Baseline' }}
+        <a-button size="small" @click="analysisStore.setBaselineTab(tab.id)">
+          {{ analysisStore.baselineTabId === tab.id ? 'Unset' : 'Set Baseline' }}
         </a-button>
       </div>
       <AnalysisGroup 
-        :element="tab.rootGroup" 
+        :node-id="tab.rootGroup.id"
+        v-model:core="tab.rootGroup.core"
+        :context="{
+          wavePath: tab.path,
+          baselineMap,
+          groupPath: '',
+          isBaseline: analysisStore.baselineTabId === tab.id,
+          tabId: tab.id
+        }"
         :is-root="true"
-        :wave-path="tab.path"
-        :baseline-map="baselineMap"
-        :group-path="''"
-        :is-baseline="baselineTabId === tab.id"
-        v-model:zoomStart="tab.zoomStart"
-        v-model:zoomEnd="tab.zoomEnd"
       />
     </a-tab-pane>
   </a-tabs>
@@ -48,82 +50,104 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import AnalysisGroup from './AnalysisGroup.vue';
+import { useAnalysisStore } from '../stores/analysis';
 
 type WaveformTab = {
   id: string;
   path: string;
   rootGroup: any;
-  zoomStart: number;
-  zoomEnd: number;
 };
 
 const createRootGroup = () => ({
   id: 'root',
   type: 'group',
-  name: '',
-  collapsed: false,
-  children: [
-    {
-      id: 'g1',
-      type: 'group',
-      name: 'GPU Performance Analysis',
-      collapsed: false,
-      children: [
-        {
-          id: 'a1',
-          type: 'analysis',
-          name: 'Compute (SM) Throughput [%]',
-          metricCode: '# Calculate SM Throughput\n# Return a single value (0-1)\nnp.mean(data["sm_active"])',
-          transformCode: '# Load waveform\nsm = W(\'top.sm_active\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "sm_active": sm.value\n})',
-          chartType: 'line',
-          summaryType: 'avg',
-          maxValue: undefined
-        },
-        {
-          id: 'g2',
-          type: 'group',
-          name: 'Memory Subsystem',
+  core: {
+    name: '',
+    collapsed: false,
+    children: [
+      {
+        id: 'g1',
+        type: 'group',
+        core: {
+          name: 'GPU Performance Analysis',
           collapsed: false,
           children: [
             {
-              id: 'a2',
+              id: 'a1',
               type: 'analysis',
-              name: 'Memory Throughput [%]',
-              metricCode: '# Calculate Memory Throughput\n# Return a single value (0-1)\nnp.mean(data["dram_read"] + data["dram_write"]) / 100',
-              transformCode: '# Load waveforms\nwaves = WS([\'top.dram_read\', \'top.dram_write\'], clock=\'top.clk\')\nread = waves[0]\nwrite = waves[1]\ndata = pd.DataFrame({\n  "dram_read": read.value,\n  "dram_write": write.value\n})',
-              chartType: 'bar',
-              summaryType: 'avg',
-              maxValue: undefined
+              core: {
+                name: 'Compute (SM) Throughput [%]',
+                transformCode: '# Load waveform\nsm = W(\'top.sm_active\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "sm_active": sm.value\n})',
+                chartType: 'line',
+                summaryType: 'avg',
+                maxValue: undefined
+              },
+              context: {
+                history: []
+              }
             },
             {
-              id: 'a3',
-              type: 'analysis',
-              name: 'L2 Cache Breakdown',
-              metricCode: '# Calculate L2 Cache Metrics\n{\n  "L2 Hit Rate": np.mean(data["l2_hit"]),\n  "L2 Throughput": 0.45,\n  "L2 Write Hit Rate": 0.92\n}',
-              transformCode: '# Load waveform\nl2 = W(\'top.l2_hit\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "l2_hit": l2.value\n})',
-              chartType: 'heatmap',
-              summaryType: 'avg',
-              maxValue: undefined
+              id: 'g2',
+              type: 'group',
+              core: {
+                name: 'Memory Subsystem',
+                collapsed: false,
+                children: [
+                  {
+                    id: 'a2',
+                    type: 'analysis',
+                    core: {
+                      name: 'Memory Throughput [%]',
+                      transformCode: '# Load waveforms\nwaves = WS([\'top.dram_read\', \'top.dram_write\'], clock=\'top.clk\')\nread = waves[0]\nwrite = waves[1]\ndata = pd.DataFrame({\n  "dram_read": read.value,\n  "dram_write": write.value\n})',
+                      chartType: 'bar',
+                      summaryType: 'avg',
+                      maxValue: undefined
+                    },
+                    context: {
+                      history: []
+                    }
+                  },
+                  {
+                    id: 'a3',
+                    type: 'analysis',
+                    core: {
+                      name: 'L2 Cache Breakdown',
+                      transformCode: '# Load waveform\nl2 = W(\'top.l2_hit\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "l2_hit": l2.value\n})',
+                      chartType: 'heatmap',
+                      summaryType: 'avg',
+                      maxValue: undefined
+                    },
+                    context: {
+                      history: []
+                    }
+                  }
+                ]
+              }
             }
           ]
         }
-      ]
-    }
-  ]
+      }
+    ]
+  }
 });
 
 const waveformTabs = ref<WaveformTab[]>([
   {
     id: 'waveform-1',
     path: '/home/cxzzzz/Programming/hardware/WaveGauge/backend/sample.vcd',
-    rootGroup: createRootGroup(),
-    zoomStart: 0,
-    zoomEnd: 100
+    rootGroup: createRootGroup()
   }
 ]);
+const analysisStore = useAnalysisStore();
+const firstTab = waveformTabs.value[0];
+if (firstTab) {
+  analysisStore.ensureTab(firstTab.id);
+  if (!analysisStore.baselineTabId) {
+    analysisStore.setBaselineTab(firstTab.id);
+  }
+}
 const activeTabId = ref('waveform-1');
 const nextTabIndex = ref(2);
-const baselineTabId = ref('waveform-1');
 
 const getBaseName = (path: string) => {
   const fileName = path.split('/').pop() ?? '';
@@ -153,19 +177,19 @@ const buildSignature = (groupPath: string, analysisName: string) => {
 };
 
 const baselineMap = computed(() => {
-  const baselineTab = waveformTabs.value.find(tab => tab.id === baselineTabId.value);
+  const baselineTab = waveformTabs.value.find(tab => tab.id === analysisStore.baselineTabId);
   if (!baselineTab) return {};
-  const map: Record<string, { result: any; history: any[] | undefined }> = {};
+  const map: Record<string, { history: any[] | undefined }> = {};
 
   const walk = (node: any, path: string) => {
     if (node?.type === 'group') {
-      const nextPath = buildGroupPath(path, node.name ?? '');
-      (node.children ?? []).forEach((child: any) => walk(child, nextPath));
+      const nextPath = buildGroupPath(path, node.core?.name ?? '');
+      (node.core?.children ?? []).forEach((child: any) => walk(child, nextPath));
       return;
     }
     if (node?.type === 'analysis') {
-      const signature = buildSignature(path, node.name ?? '');
-      map[signature] = { result: node.result, history: node.history };
+      const signature = buildSignature(path, node.core?.name ?? '');
+      map[signature] = { history: node.context?.history };
     }
   };
 
@@ -179,10 +203,9 @@ const addWaveformTab = () => {
   waveformTabs.value.push({
     id,
     path: '',
-    rootGroup: createRootGroup(),
-    zoomStart: 0,
-    zoomEnd: 100
+    rootGroup: createRootGroup()
   });
+  analysisStore.ensureTab(id);
   activeTabId.value = id;
 };
 
@@ -192,7 +215,4 @@ const handleTabEdit = (_targetKey: string | MouseEvent, action: 'add' | 'remove'
   }
 };
 
-const toggleBaseline = (tabId: string) => {
-  baselineTabId.value = baselineTabId.value === tabId ? '' : tabId;
-};
 </script>
