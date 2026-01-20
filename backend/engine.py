@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from asteval import Interpreter
 from wavekit import Waveform
+from functools import lru_cache
 
 try:
     from wavekit import VcdReader, FsdbReader
@@ -14,39 +15,6 @@ except ImportError:
     from wavekit import VcdReader
 
     FsdbReader = None
-
-
-def get_reader_class(file_path: str) -> type:
-    suffix = Path(file_path).suffix.lower()
-    if suffix == '.vcd':
-        return VcdReader
-    if suffix == '.fsdb':
-        if FsdbReader is None:
-            raise ValueError('FsdbReader is not available in current wavekit build')
-        return FsdbReader
-    raise ValueError(f'Unsupported waveform file type: {suffix or "unknown"}')
-
-
-def build_interpreter(reader: Any, data: Any, context: dict[str, Any]) -> Interpreter:
-    def load_wave(path: str, **kwargs: Any) -> Any:
-        wave = reader.load_wave(path, **kwargs)
-        if context.get('timestamps') is None:
-            context['timestamps'] = wave.time
-        return wave
-
-    def load_waves(paths: Any, **kwargs: Any) -> Any:
-        if 'clock' in kwargs:
-            clock = kwargs.pop('clock')
-            waves = [reader.load_wave(path, clock=clock, **kwargs) for path in paths]
-        else:
-            waves = reader.load_waves(paths, **kwargs)
-        if context.get('timestamps') is None and waves:
-            context['timestamps'] = waves[0].time
-        return waves
-
-    return Interpreter(
-        usersyms={'data': data, 'pd': pd, 'np': np, 'W': load_wave, 'WS': load_waves}
-    )
 
 
 def format_asteval_error(aeval: Interpreter) -> str:
@@ -60,23 +28,45 @@ def format_asteval_error(aeval: Interpreter) -> str:
     return 'Unknown error'
 
 
-def execute_transform(
-    reader: Any, code: str, context: dict[str, Any], data: Any = None
-) -> Any:
-    if not code.strip():
-        return data
-
-    aeval = build_interpreter(reader, data, context)
-    result = aeval(code)
-    if aeval.error:
-        raise RuntimeError(format_asteval_error(aeval))
-    return result
-
 
 class AnalysisEngine:
+
+
+    @lru_cache(maxsize=128)
+    def load_wave(self, path: str, clock: str = None) -> Any:
+        wave = self.reader.load_wave(path, clock=clock)
+        return wave
+
+    @lru_cache(maxsize=128)
+    def load_matched_waves(self, pattern: Any, clock: str = None, **kwargs: Any) -> Any:
+        waves = self.reader.load_waves(pattern, clock=clock, **kwargs)
+        return waves
+
+    def execute_transform(
+        self, code: str 
+    ) -> Any:
+        aeval = Interpreter(
+            usersyms={'pd': pd, 'np': np, 'W': self.load_wave, 'MW': self.load_matched_waves}   
+        )
+        result = aeval(code)
+        if aeval.error:
+            raise RuntimeError(format_asteval_error(aeval))
+        return result
+
+    @staticmethod
+    def get_reader_class(file_path: str) -> type:
+        suffix = Path(file_path).suffix.lower()
+        if suffix == '.vcd':
+            return VcdReader
+        if suffix == '.fsdb':
+            if FsdbReader is None:
+                raise ValueError('FsdbReader is not available in current wavekit build')
+            return FsdbReader
+        raise ValueError(f'Unsupported waveform file type: {suffix or "unknown"}')
+
     def __init__(self, file_path: str) -> None:
         self.file_path = file_path
-        self.reader_class = get_reader_class(file_path)
+        self.reader_class = self.get_reader_class(file_path)
         self.reader = self.reader_class(file_path)
         self.reader.__enter__()
 
@@ -86,8 +76,7 @@ class AnalysisEngine:
             self.reader = None
 
     def analyze(self, transform_code: str, sample_rate: int = 1) -> dict[str, Any]:
-        context: dict[str, Any] = {'timestamps': None}
-        processed_data = execute_transform(self.reader, transform_code, context)
+        processed_data = self.execute_transform(transform_code)
         processed_data = {'': processed_data} if not isinstance(processed_data, dict) else processed_data
 
         result: dict[str, Any] = {'timestamps': None, 'values': {}}

@@ -24,11 +24,15 @@ class AnalyzeRequest(BaseModel):
 
 
 engines: dict[str, AnalysisEngine] = {}
-
-
-def get_engine(file_path: str) -> AnalysisEngine:
+def get_engine(file_path: str, max_cache_num: int = 16) -> AnalysisEngine:
     engine = engines.get(file_path)
     if engine is None:
+        if len(engines) >= max_cache_num:
+            # Close the earliest engine
+            earliest_file_path = next(iter(engines))
+            engines[earliest_file_path].close()
+            del engines[earliest_file_path]
+
         engine = AnalysisEngine(file_path)
         engines[file_path] = engine
     return engine
