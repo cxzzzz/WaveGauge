@@ -102,10 +102,11 @@
             :node-id="child.id"
             v-model:core="child.core"
             :context="{
-              groupPath: buildGroupPath(groupPathModel, child.core?.name ?? ''),
+              groupPath: groupPathModel ? `${groupPathModel}/${child.core.name}` : child.core.name,
               baselineMap: contextModel.baselineMap,
               tabId: contextModel.tabId
             }"
+            :is-root="false"
             :ref="(el: any) => setChildRef(el, child.id)"
             @delete="deleteChild(index)"
           />
@@ -114,7 +115,7 @@
             :ref="(el: any) => setChildRef(el, child.id)"
             v-model:core="child.core"
             :context="buildAnalysisContext(child)"
-            @update:context="(val) => updateChildContext(child.id, val)"
+            @update:context="(val) => updateChildContext(child.id, val.history)"
             @delete="deleteChild(index)"
           />
         </template>
@@ -152,21 +153,26 @@ defineOptions({
 
 type GroupCore = {
   name: string;
-  collapsed?: boolean;
-  children?: any[];
+  collapsed: boolean;
+  children: any[];
+};
+
+type History = {
+  timestamps: Array<string | number>;
+  values: Record<string, number[]>;
 };
 
 type GroupContext = {
-  groupPath?: string;
-  baselineMap?: Record<string, { history: any[] | undefined }>;
-  tabId?: string;
+  groupPath: string;
+  baselineMap: Record<string, { history: History }>;
+  tabId: string;
 };
 
 const props = defineProps<{
-  nodeId?: string;
+  nodeId: string;
   core: GroupCore;
-  context?: GroupContext;
-  isRoot?: boolean;
+  context: GroupContext;
+  isRoot: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -178,63 +184,48 @@ const coreModel = computed({
   get: () => props.core,
   set: (val: GroupCore) => emit('update:core', val)
 });
-const contextModel = computed(() => props.context ?? {});
+const contextModel = computed(() => props.context);
 const updateCore = (patch: Partial<GroupCore>) => {
   emit('update:core', { ...props.core, ...patch });
 };
 
 const childrenModel = computed({
-  get: () => coreModel.value.children ?? [],
+  get: () => coreModel.value.children,
   set: (val: any[]) => updateCore({ children: val })
 });
 
-const localCollapsed = ref(coreModel.value.collapsed ?? false);
+const localCollapsed = ref(coreModel.value.collapsed);
 const groupName = computed(() => coreModel.value.name);
 const localName = ref(groupName.value);
 const fileInput = ref<HTMLInputElement | null>(null);
 const isEditingName = ref(false);
 const nameInput = ref<any>(null);
 const childRefs = ref(new Map<string, any>());
-const groupPathModel = computed(() => contextModel.value.groupPath ?? '');
-const buildGroupPath = (parentPath: string, groupName: string) => {
-  if (!groupName) return parentPath;
-  return parentPath ? `${parentPath}/${groupName}` : groupName;
+const groupPathModel = computed(() => contextModel.value.groupPath);
+const buildAnalysisContext = (child: any) => {
+  const signature = groupPathModel.value
+    ? `${groupPathModel.value}/${child.core.name}`
+    : child.core.name;
+  const baselineEntry = contextModel.value.baselineMap[signature];
+  return {
+    history: child.context.history,
+    baselineHistory: baselineEntry ? baselineEntry.history : { timestamps: [], values: {} },
+    tabId: contextModel.value.tabId
+  };
 };
-const buildSignature = (groupPath: string, analysisName: string) => {
-  return groupPath ? `${groupPath}/${analysisName}` : analysisName;
-};
-const baselineEntryFor = (analysisName: string) => {
-  const signature = buildSignature(groupPathModel.value, analysisName ?? '');
-  return contextModel.value.baselineMap?.[signature];
-};
-const buildAnalysisContext = (child: any) => ({
-  ...(child.context ?? {}),
-  baselineHistory: baselineEntryFor(child.core?.name)?.history,
-  tabId: contextModel.value.tabId
-});
-const updateChildContext = (childId: string, val: any) => {
+const updateChildContext = (childId: string, history: History) => {
   const next = childrenModel.value.map((child: any) => {
     if (child.id !== childId) return child;
     return {
       ...child,
       context: {
-        ...(child.context ?? {}),
-        ...val
+        ...child.context,
+        history
       }
     };
   });
   updateCore({ children: next });
 };
-
-watch(
-  () => coreModel.value.children,
-  (val) => {
-    if (!Array.isArray(val)) {
-      updateCore({ children: [] });
-    }
-  },
-  { immediate: true }
-);
 
 watch(groupName, (val) => {
   localName.value = val;
@@ -260,7 +251,7 @@ const saveName = () => {
 };
 
 watch(() => coreModel.value.collapsed, (val) => {
-  localCollapsed.value = val ?? false;
+  localCollapsed.value = val;
 });
 
 const deleteChild = (index: number) => {
@@ -280,10 +271,10 @@ const addAnalysis = () => {
       transformCode: '# Transform data\n# data = ...',
       chartType: 'line',
       summaryType: 'avg',
-      maxValue: undefined
+      maxValue: Number.NaN
     },
     context: {
-      history: []
+      history: { timestamps: [], values: {} }
     }
   });
   updateCore({ children: next });
@@ -354,7 +345,7 @@ const cleanExportData = (data: any): any => {
 
 const exportGroup = () => {
   const groupData = {
-    id: props.nodeId ?? 'group',
+    id: props.nodeId,
     type: 'group',
     core: {
       ...props.core,
@@ -402,14 +393,24 @@ const handleImport = (event: Event) => {
             if (!item.core) {
               item.core = {
                 name: item.name ?? 'Analysis',
-                transformCode: item.transformCode,
-                description: item.description,
-                chartType: item.chartType,
-                summaryType: item.summaryType,
-                maxValue: item.maxValue
+                transformCode: item.transformCode ?? '',
+                description: item.description ?? '',
+                chartType: item.chartType ?? 'line',
+                summaryType: item.summaryType ?? 'avg',
+                maxValue: Number.isFinite(item.maxValue) ? Number(item.maxValue) : Number.NaN
               };
             }
-            item.context = { ...(item.context ?? {}), history: item.context?.history ?? item.history ?? [] };
+            item.core = {
+              name: item.core.name ?? 'Analysis',
+              transformCode: item.core.transformCode ?? '',
+              description: item.core.description ?? '',
+              chartType: item.core.chartType ?? 'line',
+              summaryType: item.core.summaryType ?? 'avg',
+              maxValue: Number.isFinite(item.core.maxValue) ? Number(item.core.maxValue) : Number.NaN
+            };
+            item.context = {
+              history: item.context?.history ?? item.history ?? { timestamps: [], values: {} }
+            };
             delete item.name;
             delete item.transformCode;
             delete item.description;
@@ -422,12 +423,12 @@ const handleImport = (event: Event) => {
           }
           if (item.type === 'group') {
             if (!item.core) {
-              item.core = { name: item.name ?? 'Group' };
+              item.core = { name: item.name ?? 'Group', collapsed: false, children: [] };
             }
-            const children = item.core?.children ?? item.state?.children ?? item.children ?? [];
+            const children = item.core.children ?? item.state?.children ?? item.children ?? [];
             item.core = {
               ...item.core,
-              collapsed: item.core?.collapsed ?? item.state?.collapsed ?? item.collapsed ?? false,
+              collapsed: item.core.collapsed ?? item.state?.collapsed ?? item.collapsed ?? false,
               children
             };
             delete item.name;

@@ -64,16 +64,13 @@
 <script setup lang="ts">
 import { computed, toRefs } from 'vue';
 
-const props = withDefaults(defineProps<{
-  currentValue?: number;
-  baselineValue?: number;
-  maxValue?: number;
-  hasBaseline?: boolean;
-  valueWidthClass?: string;
-}>(), {
-  valueWidthClass: 'w-[48px]',
-  hasBaseline: false
-});
+const props = defineProps<{
+  currentValue: number;
+  baselineValue: number;
+  maxValue: number;
+  hasBaseline: boolean;
+  valueWidthClass: string;
+}>();
 
 const { currentValue, baselineValue, maxValue, hasBaseline, valueWidthClass } = toRefs(props);
 
@@ -94,14 +91,14 @@ const effectiveMax = computed(() => {
   return Number.isFinite(max) ? max : 0;
 });
 
-const calcPercent = (val: number | undefined, maxVal: number) => {
+const calcPercent = (val: number, maxVal: number) => {
   const numeric = Number(val);
   if (!Number.isFinite(numeric)) return 0;
   if (!(maxVal > 0)) return 0;
   return Math.min(Math.max((numeric / maxVal) * 100, 0), 100);
 };
 
-const calcDelta = (current: number | undefined, baseline: number | undefined) => {
+const calcDelta = (current: number, baseline: number) => {
   const cur = Number(current);
   const base = Number(baseline);
   if (!Number.isFinite(cur) || !Number.isFinite(base)) return undefined;

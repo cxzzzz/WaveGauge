@@ -139,10 +139,11 @@
             Chart Type
           </div>
           <a-select
-            v-model:value="chartTypeModel"
+            :value="chartTypeValue"
             size="small"
             class="!text-xs w-[160px]"
             :options="chartTypeOptions"
+            @update:value="updateCore({ chartType: $event })"
           />
         </div>
         <div class="flex items-center gap-2">
@@ -150,10 +151,11 @@
             Data Summary
           </div>
           <a-select
-            v-model:value="summaryTypeModel"
+            :value="summaryTypeValue"
             size="small"
             class="!text-xs w-[140px]"
             :options="summaryTypeOptions"
+            @update:value="updateCore({ summaryType: $event })"
           />
         </div>
         <div class="flex items-center gap-2">
@@ -161,12 +163,13 @@
             Max Value
           </div>
           <a-input-number
-            v-model:value="maxValueModel"
+            :value="maxValueValue"
             size="small"
             :min="0"
             :step="0.01"
             class="!text-xs w-[120px]"
             placeholder="Auto"
+            @update:value="updateCore({ maxValue: $event === null ? Number.NaN : Number($event) })"
           />
         </div>
       </div>
@@ -207,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, toRef } from 'vue';
 import { 
   CodeOutlined, 
   UpOutlined, 
@@ -226,28 +229,35 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import axios from 'axios';
 import { message } from 'ant-design-vue';
 import ProgressValueDisplay from './ProgressValueDisplay.vue';
-import { useAnalysisStore } from '../stores/analysis';
+import { useAnalysisStore, type ZoomRange } from '../stores/analysis';
 
 const API_URL = 'http://localhost:8000/api';
+const SINGLE_VALUE_KEY = '__single__';
+const MIN_EDITOR_HEIGHT = 50;
 
 type AnalysisCore = {
   name: string;
-  transformCode?: string;
-  description?: string;
-  chartType?: string;
-  summaryType?: string;
-  maxValue?: number;
+  transformCode: string;
+  description: string;
+  chartType: string;
+  summaryType: string;
+  maxValue: number;
+};
+
+type History = {
+  timestamps: Array<number>;
+  values: Record<string, number[]>;
 };
 
 type AnalysisContext = {
-  history?: Array<{ step: string | number; [key: string]: any }>;
-  baselineHistory?: Array<{ step: string | number; [key: string]: any }>;
-  tabId?: string;
+  history: History;
+  baselineHistory: History;
+  tabId: string;
 };
 
 const props = defineProps<{
   core: AnalysisCore;
-  context?: AnalysisContext;
+  context: AnalysisContext;
 }>();
 
 const emit = defineEmits<{
@@ -256,22 +266,17 @@ const emit = defineEmits<{
   (e: 'delete'): void;
 }>();
 
-const coreModel = computed({
-  get: () => props.core,
-  set: (val: AnalysisCore) => emit('update:core', val)
-});
-const contextModel = computed(() => props.context ?? {});
 const updateCore = (patch: Partial<AnalysisCore>) => {
   emit('update:core', { ...props.core, ...patch });
 };
 const updateContext = (patch: Partial<AnalysisContext>) => {
-  emit('update:context', { ...(props.context ?? {}), ...patch });
+  emit('update:context', { ...props.context, ...patch });
 };
-const name = computed(() => coreModel.value.name);
-const description = computed(() => coreModel.value.description ?? '');
-const transformCode = computed(() => coreModel.value.transformCode ?? '');
+const name = computed(() => props.core.name);
+const description = computed(() => props.core.description);
+const transformCode = computed(() => props.core.transformCode);
 const isEditingName = ref(false);
-const localName = ref(coreModel.value.name);
+const localName = ref(props.core.name);
 const nameInput = ref<HTMLInputElement | null>(null);
 const errorMessage = ref('');
 const chartTypeOptions = [
@@ -287,160 +292,95 @@ const summaryTypeOptions = [
   { label: 'Minimum', value: 'min' },
   { label: 'Sum', value: 'sum' }
 ];
-const chartTypeModel = computed({
-  get: () => coreModel.value.chartType ?? 'line',
-  set: (val: string) => updateCore({ chartType: val })
-});
-const summaryTypeModel = computed({
-  get: () => coreModel.value.summaryType ?? 'avg',
-  set: (val: string) => updateCore({ summaryType: val })
-});
-const maxValueModel = computed({
-  get: () => coreModel.value.maxValue,
-  set: (val: number | null) => updateCore({ maxValue: val === null ? undefined : val ?? undefined })
-});
+const chartTypeValue = computed(() => props.core.chartType);
+const summaryTypeValue = computed(() => props.core.summaryType);
+const maxValueValue = computed(() => props.core.maxValue);
 
-const historyData = computed(() => contextModel.value.history ?? []);
+const historyData = computed(() => props.context.history);
 const analysisStore = useAnalysisStore();
-const tabId = computed(() => contextModel.value.tabId ?? '');
-watch(tabId, (val) => {
-  if (val) {
-    analysisStore.ensureTab(val);
-  }
-}, { immediate: true });
-const zoomStartValue = computed({
-  get: () => {
-    if (!tabId.value) return 0;
-    return analysisStore.getZoomStart(tabId.value);
-  },
-  set: (val: number) => {
-    if (!tabId.value) return;
-    analysisStore.setZoomStart(tabId.value, val);
-  }
+const tabId = computed(() => props.context.tabId);
+const tabState = toRef(analysisStore.tabs, tabId.value);
+const zoomRange = toRef(tabState.value, 'zoom');
+
+const visibleHistory = computed(() => getVisibleHistory(historyData.value, zoomRange.value));
+const summaryValues = computed(() => {
+  return calculateSummary(visibleHistory.value, summaryTypeValue.value);
 });
-const zoomEndValue = computed({
-  get: () => {
-    if (!tabId.value) return 100;
-    return analysisStore.getZoomEnd(tabId.value);
-  },
-  set: (val: number) => {
-    if (!tabId.value) return;
-    analysisStore.setZoomEnd(tabId.value, val);
-  }
+const wavePath = computed<string>(() => {
+  return tabState.value.wavePath;
 });
-const summaryValue = computed(() => {
-  if (!historyData.value.length) return undefined;
-  const summaryType = coreModel.value.summaryType ?? 'avg';
-  return calculateSummary(
-    getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value),
-    summaryType
-  );
-});
-const hasResult = computed(() => summaryValue.value !== undefined);
-const value = computed(() => summaryValue.value);
-const wavePath = computed(() => {
-  if (!tabId.value) return '';
-  return analysisStore.getWavePath(tabId.value);
-});
-const sampleRate = computed(() => {
-  if (!tabId.value) return 1;
-  return analysisStore.getSampleRate(tabId.value);
+const sampleRate = computed<number>(() => {
+  return tabState.value.sampleRate;
 });
 const isBaseline = computed(() => {
-  if (!tabId.value) return false;
   return analysisStore.baselineTabId === tabId.value;
 });
 
-const isMultiValue = computed(() => {
-  return typeof value.value === 'object' && value.value !== null;
-});
+const isMultiValue = ref(false);
 
 const hasBaselineComparison = computed(() => {
   if (isBaseline.value) return false;
-  return baselineHistoryData.value.length > 0;
+  return baselineHistoryData.value.timestamps.length > 0;
 });
-const baselineHistoryData = computed(() => contextModel.value.baselineHistory ?? []);
-const baselineZoomStart = ref(zoomStartValue.value);
-const baselineZoomEnd = ref(zoomEndValue.value);
-const baselineSummaryValue = computed(() => {
+const baselineHistoryData = computed(() => props.context.baselineHistory);
+const baselineZoomRange = ref<ZoomRange>(zoomRange.value);
+const baselineVisibleHistory = computed(() => {
+  return getVisibleHistory(baselineHistoryData.value, baselineZoomRange.value);
+});
+const baselineSummaryValues = computed(() => {
   if (!hasBaselineComparison.value) return undefined;
-  const summaryType = coreModel.value.summaryType ?? 'avg';
-  return calculateSummary(
-    getVisibleHistory(baselineHistoryData.value, baselineZoomStart.value, baselineZoomEnd.value),
-    summaryType
-  );
+  if (!baselineVisibleHistory.value.timestamps.length) return undefined;
+  return calculateSummary(baselineVisibleHistory.value, summaryTypeValue.value);
 });
 
-const getMaxForKey = (key: string) => {
-  if (coreModel.value.maxValue !== undefined) return coreModel.value.maxValue;
-  const visible = getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value);
+const getMaxFromHistory = (history: History, key: string) => {
   let maxVal = 0;
-  visible.forEach(item => {
-    const v = Number(item[key]);
-    if (Number.isFinite(v)) {
-      if (v > maxVal) maxVal = v;
+  history.values[key]?.forEach((item) => {
+    const value = Number(item);
+    if (Number.isFinite(value) && value > maxVal) {
+      maxVal = value;
     }
   });
   return maxVal;
 };
 
+const getMaxForKey = (key: string) => {
+  if (Number.isFinite(props.core.maxValue)) return props.core.maxValue;
+  return getMaxFromHistory(visibleHistory.value, key);
+};
+
 const effectiveMax = computed(() => {
-  if (coreModel.value.maxValue !== undefined) return coreModel.value.maxValue;
-  const visible = getVisibleHistory(historyData.value, zoomStartValue.value, zoomEndValue.value);
-  const keys = Object.keys(visible[0] ?? {}).filter(k => k !== 'step');
+  if (Number.isFinite(props.core.maxValue)) return props.core.maxValue;
+  const keys = Object.keys(visibleHistory.value.values);
   if (keys.length !== 1) return 0;
   const key = keys[0];
   if (!key) return 0;
-  let maxVal = 0;
-  visible.forEach(item => {
-    const v = Number(item[key]);
-    if (Number.isFinite(v)) {
-      if (v > maxVal) maxVal = v;
-    }
-  });
-  return maxVal;
+  return getMaxFromHistory(visibleHistory.value, key);
 });
 
 const getMaxValueForDisplay = (key: string) => {
-  if (key === '__single__') return Number(effectiveMax.value) || 0;
+  if (key === SINGLE_VALUE_KEY) return Number(effectiveMax.value) || 0;
   return Number(getMaxForKey(key)) || 0;
 };
 
 const getBaselineValueForKey = (key: string) => {
   if (!hasBaselineComparison.value) return undefined;
-  const base = baselineSummaryValue.value;
-  if (base && typeof base === 'object') {
-    return (base as Record<string, number>)[key];
-  }
-  return base as number | undefined;
+  return baselineSummaryValues.value?.[key];
 };
 
 type DisplayItem = {
   key: string;
   label: string;
-  currentValue: number | undefined;
-  baselineValue: number | undefined;
+  currentValue: number;
+  baselineValue: number;
   maxValue: number;
   hasBaseline: boolean;
 };
 
 const displayItems = computed<DisplayItem[]>(() => {
-  if (!isMultiValue.value) {
-    const currentValue = hasResult.value ? Number(value.value) : undefined;
-    const baselineValue = getBaselineValueForKey('__single__');
-    return [{
-      key: '__single__',
-      label: '',
-      currentValue,
-      baselineValue,
-      maxValue: getMaxValueForDisplay('__single__'),
-      hasBaseline: hasBaselineComparison.value
-    }];
-  }
-  const resultMap = value.value as Record<string, number>;
-  return Object.keys(resultMap ?? {}).map((key) => {
-    const currentValue = Number(resultMap[key]);
-    const baselineValue = getBaselineValueForKey(key);
+  return Object.keys(summaryValues.value).map((key) => {
+    const currentValue = Number(summaryValues.value?.[key]);
+    const baselineValue = getBaselineValueForKey(key) ?? Number.NaN;
     return {
       key,
       label: key,
@@ -469,9 +409,15 @@ const saveName = () => {
   }
 };
 
+const applyBackendError = (backendError: unknown, prefix: string) => {
+  const messageText = String(backendError ?? 'Unknown error');
+  errorMessage.value = messageText;
+  message.error(`${prefix}: ${messageText}`);
+};
+
 const runAnalysis = async () => {
   errorMessage.value = '';
-  if (!wavePath.value?.trim()) {
+  if (!wavePath.value.trim()) {
     message.error('Waveform path is required');
     return;
   }
@@ -488,44 +434,19 @@ const runAnalysis = async () => {
       message.destroy();
       message.success(`Analysis for ${name.value} completed!`);
       errorMessage.value = '';
-      
-      // Update history/table data
-      const payload = response.data?.data;
-      if (payload && Array.isArray(payload)) {
-        const newHistory: any[] = [];
-        payload.forEach((row: any, index: number) => {
-          const step = String(row?.timestamp ?? index);
-          const entry: Record<string, number | string> = { step };
-          Object.keys(row ?? {}).forEach((key) => {
-            if (key === 'timestamp') return;
-            const numericValue = Number(row[key]);
-            if (Number.isFinite(numericValue)) entry[key] = numericValue;
-          });
-          newHistory.push(entry);
-        });
-        updateContext({ history: newHistory });
-      } else if (payload && payload.timestamps && payload.values) {
-        const timestamps: any[] = payload.timestamps;
-        const valuesObj: Record<string, any[]> = payload.values;
-        const len = Array.isArray(timestamps) ? timestamps.length : 0;
-        const keys = Object.keys(valuesObj ?? {});
-        const newHistory: any[] = [];
-        for (let i = 0; i < len; i++) {
-          const entry: Record<string, number | string> = { step: String(timestamps[i]) };
-          keys.forEach((k) => {
-            const v = Number(valuesObj[k]?.[i]);
-            if (Number.isFinite(v)) entry[k] = v;
-          });
-          newHistory.push(entry);
-        }
-        updateContext({ history: newHistory });
-      }
-      
+
+      const payload = response.data.data as {
+        timestamps: Array<number>;
+        values: Record<string, number[]> | number[];
+      };
+      isMultiValue.value = !Array.isArray(payload.values);
+      const valuesMap = Array.isArray(payload.values) ? { [SINGLE_VALUE_KEY]: payload.values } : payload.values;
+      const newHistory: History = { timestamps: payload.timestamps, values: valuesMap };
+      updateContext({ history: newHistory });
     } else {
       message.destroy();
       const backendError = response.data?.error ?? 'Unknown error';
-      errorMessage.value = String(backendError);
-      message.error(`Error: ${backendError}`);
+      applyBackendError(backendError, 'Error');
     }
   } catch (error: any) {
     message.destroy();
@@ -534,8 +455,7 @@ const runAnalysis = async () => {
       error?.response?.data?.error ??
       error?.message ??
       'Unknown error';
-    errorMessage.value = String(backendError);
-    message.error(`Request failed: ${backendError}`);
+    applyBackendError(backendError, 'Request failed');
   }
 };
 
@@ -559,7 +479,7 @@ const startResize = (e: MouseEvent) => {
 
   const onMouseMove = (ev: MouseEvent) => {
     const delta = ev.clientY - startY;
-    const newHeight = Math.max(50, startHeight + delta); // Min height 50px
+    const newHeight = Math.max(MIN_EDITOR_HEIGHT, startHeight + delta);
     transformEditorHeight.value = newHeight;
   };
 
@@ -579,58 +499,46 @@ const extensions = computed(() => {
 });
 
 const calculateSummary = (
-  history: Array<{ step: string | number; [key: string]: any }>,
+  history: History,
   summaryType: string
-): number | Record<string, number> | undefined => {
-  if (!history.length) return undefined;
-  const keys = Object.keys(history[0] ?? {}).filter(k => k !== 'step');
-  if (!keys.length) return undefined;
+): Record<string, number> => {
+  const keys = Object.keys(history.values);
 
-  const summarize = (values: number[]): number | undefined => {
-    if (!values.length) return undefined;
-    if (summaryType === 'max') return Math.max(...values);
-    if (summaryType === 'min') return Math.min(...values);
-    if (summaryType === 'sum') return values.reduce((acc, val) => acc + val, 0);
-    const total = values.reduce((acc, val) => acc + val, 0);
-    return total / values.length;
+  const summarize = (values: number[]): number => {
+    const numericValues = values.map(Number).filter(Number.isFinite);
+    if (!numericValues.length) return Number.NaN;
+    if (summaryType === 'max') return Math.max(...numericValues);
+    if (summaryType === 'min') return Math.min(...numericValues);
+    if (summaryType === 'sum') return numericValues.reduce((acc, val) => acc + val, 0);
+    const total = numericValues.reduce((acc, val) => acc + val, 0);
+    return total / numericValues.length;
   };
 
-  const result: Record<string, number> = {};
-  keys.forEach((key) => {
-    const values = history
-      .map(item => Number(item[key]))
-      .filter(val => Number.isFinite(val));
-    const summaryValue = summarize(values);
-    if (summaryValue !== undefined) {
-      result[key] = summaryValue;
-    }
-  });
-
-  if (keys.length === 1) {
-    const singleKey = keys[0];
-    if (!singleKey) return undefined;
-    return result[singleKey];
-  }
-
-  return Object.keys(result).length ? result : undefined;
+  return Object.fromEntries(
+    keys.map(key => [key, summarize(history.values[key]!)])
+  );
 };
 
 const getVisibleHistory = (
-  history: Array<{ step: string | number; [key: string]: any }> = historyData.value,
-  zoomStart: number = zoomStartValue.value,
-  zoomEnd: number = zoomEndValue.value
+  history: History = historyData.value,
+  zoomRange: ZoomRange
 ) => {
-  const length = history.length;
-  if (!length) return [];
+  const length = history.timestamps.length;
+  if (!length) return { timestamps: [], values: {} };
   const startIndex = Math.max(
     0,
-    Math.min(length - 1, Math.floor((zoomStart / 100) * (length - 1)))
+    Math.min(length - 1, Math.floor((zoomRange.start / 100) * (length - 1)))
   );
   const endIndex = Math.max(
     startIndex,
-    Math.min(length - 1, Math.ceil((zoomEnd / 100) * (length - 1)))
+    Math.min(length - 1, Math.ceil((zoomRange.end / 100) * (length - 1)))
   );
-  return history.slice(startIndex, endIndex + 1);
+  const timestamps = history.timestamps.slice(startIndex, endIndex + 1);
+  const values: Record<string, number[]> = {};
+  Object.keys(history.values).forEach((key) => {
+    values[key] = (history.values[key] ?? []).slice(startIndex, endIndex + 1);
+  });
+  return { timestamps, values };
 };
 
 // Initialize Chart
@@ -638,24 +546,23 @@ const baselineChartRef = ref<HTMLElement | null>(null);
 let baselineChartInstance: echarts.ECharts | null = null;
 
 const buildChartOption = (
-  history: Array<{ step: string | number; [key: string]: any }>,
+  history: History,
   chartType: string,
-  zoomStart: number,
-  zoomEnd: number,
+  zoomRange: ZoomRange,
   showSlider: boolean,
-  userMaxValue?: number
+  userMaxValue: number
 ): echarts.EChartsOption => {
   const textColor = isDark.value ? '#a0a0a0' : '#666';
   const axisColor = isDark.value ? '#404040' : '#e0e0e0';
-  const steps = history.map(item => String(item.step));
-  const keys = Object.keys(history[0] ?? {}).filter(k => k !== 'step');
+  const steps = history.timestamps.map(item => String(item));
+  const keys = Object.keys(history.values);
   const gridBottom = showSlider ? '20%' : '8%';
   const dataZoom: echarts.DataZoomComponentOption[] = [
     {
       type: 'inside',
       xAxisIndex: 0,
-      start: zoomStart,
-      end: zoomEnd
+      start: zoomRange.start,
+      end: zoomRange.end
     }
   ];
   if (showSlider) {
@@ -664,8 +571,8 @@ const buildChartOption = (
       xAxisIndex: 0,
       height: '10%',
       bottom: '2%',
-      start: zoomStart,
-      end: zoomEnd
+      start: zoomRange.start,
+      end: zoomRange.end
     });
   }
   const option: echarts.EChartsOption = {
@@ -708,8 +615,8 @@ const buildChartOption = (
     const heatmapData: Array<[number, number, number]> = [];
     let maxValue = 0;
     yCategories.forEach((key, yIndex) => {
-      history.forEach((item, xIndex) => {
-        const rawValue = Number(item[key] ?? 0);
+      steps.forEach((_, xIndex) => {
+        const rawValue = Number(history.values[key]?.[xIndex] ?? 0);
         const value = Number.isFinite(rawValue) ? rawValue : 0;
         maxValue = Math.max(maxValue, value);
         heatmapData.push([xIndex, yIndex, value]);
@@ -748,7 +655,7 @@ const buildChartOption = (
     const isStacked = chartType === 'stacked_bar' || chartType === 'stacked_line';
     const seriesType = chartType.includes('bar') ? 'bar' : 'line';
     const series = keys.map(key => {
-      const data = history.map(item => item[key]);
+      const data = steps.map((_, index) => history.values[key]?.[index] ?? 0);
       if (seriesType === 'line') {
         const lineItem: echarts.LineSeriesOption = {
           name: key,
@@ -778,67 +685,85 @@ const buildChartOption = (
   return option;
 };
 
-const initCharts = () => {
-  if (chartRef.value) {
-    chartInstance = echarts.init(chartRef.value);
-    chartInstance.on('datazoom', handleMainDataZoom);
+const createChartInstance = (
+  target: HTMLElement | null,
+  onZoom: (event: any) => void
+) => {
+  if (!target) return null;
+  const instance = echarts.init(target);
+  instance.on('datazoom', onZoom);
+  return instance;
+};
+
+const disposeCharts = () => {
+  if (chartInstance) {
+    chartInstance.dispose();
+    chartInstance = null;
   }
-  if (hasBaselineComparison.value && baselineChartRef.value) {
-    baselineChartInstance = echarts.init(baselineChartRef.value);
-    baselineChartInstance.on('datazoom', handleBaselineDataZoom);
+  if (baselineChartInstance) {
+    baselineChartInstance.dispose();
+    baselineChartInstance = null;
+  }
+};
+
+const applyChartOption = (
+  instance: echarts.ECharts | null,
+  history: History,
+  zoomRange: ZoomRange
+) => {
+  if (!instance) return;
+  if (!history.timestamps.length) {
+    instance.clear();
+    return;
+  }
+  const option = buildChartOption(
+    history,
+    chartTypeValue.value,
+    zoomRange,
+    true,
+    maxValueValue.value
+  );
+  isSettingZoom.value = true;
+  instance.setOption(option);
+  setTimeout(() => {
+    isSettingZoom.value = false;
+  }, 0);
+};
+
+const initCharts = () => {
+  chartInstance = createChartInstance(chartRef.value, 
+    (event: any) => updateZoomFromEvent(event, zoomRange));
+  if (hasBaselineComparison.value) {
+    baselineChartInstance = createChartInstance(baselineChartRef.value, 
+    (event: any) => updateZoomFromEvent(event, baselineZoomRange));
   }
   updateCharts();
 };
 
 const updateCharts = () => {
   if (!chartInstance && !baselineChartInstance) return;
-  const zoomStart = zoomStartValue.value;
-  const zoomEnd = zoomEndValue.value;
-  const baselineStart = baselineZoomStart.value;
-  const baselineEnd = baselineZoomEnd.value;
-  const chartType = coreModel.value.chartType ?? 'line';
-  if (chartInstance) {
-    if (historyData.value.length) {
-      const option = buildChartOption(historyData.value, chartType, zoomStart, zoomEnd, true, coreModel.value.maxValue);
-      isSettingZoom.value = true;
-      chartInstance.setOption(option);
-      setTimeout(() => {
-        isSettingZoom.value = false;
-      }, 0);
-    } else {
-      chartInstance.clear();
-    }
-  }
-  if (baselineChartInstance) {
-    if (baselineHistoryData.value.length) {
-      const option = buildChartOption(baselineHistoryData.value, chartType, baselineStart, baselineEnd, true, coreModel.value.maxValue);
-      isSettingZoom.value = true;
-      baselineChartInstance.setOption(option);
-      setTimeout(() => {
-        isSettingZoom.value = false;
-      }, 0);
-    } else {
-      baselineChartInstance.clear();
-    }
-  }
+  applyChartOption(
+    chartInstance,
+    historyData.value,
+    zoomRange.value
+  );
+  applyChartOption(
+    baselineChartInstance,
+    baselineHistoryData.value,
+    baselineZoomRange.value
+  );
 };
 
-const handleMainDataZoom = (event: any) => {
+const updateZoomFromEvent = (
+  event: any,
+  zoomRangeRef: { value: ZoomRange },
+) => {
   if (isSettingZoom.value) return;
   const payload = event?.batch?.[0] ?? event ?? {};
-  const start = typeof payload.start === 'number' ? payload.start : zoomStartValue.value;
-  const end = typeof payload.end === 'number' ? payload.end : zoomEndValue.value;
-  zoomStartValue.value = start;
-  zoomEndValue.value = end;
-};
-
-const handleBaselineDataZoom = (event: any) => {
-  if (isSettingZoom.value) return;
-  const payload = event?.batch?.[0] ?? event ?? {};
-  const start = typeof payload.start === 'number' ? payload.start : baselineZoomStart.value;
-  const end = typeof payload.end === 'number' ? payload.end : baselineZoomEnd.value;
-  baselineZoomStart.value = start;
-  baselineZoomEnd.value = end;
+  const start = typeof payload.start === 'number' ? payload.start : zoomRangeRef.value.start;
+  const end = typeof payload.end === 'number' ? payload.end : zoomRangeRef.value.end;
+  zoomRangeRef.value.start = start;
+  zoomRangeRef.value.end = end;
 };
 
 // Watch theme changes
@@ -870,14 +795,7 @@ watch(showTimeline, async (val) => {
     await nextTick();
     initCharts();
   } else {
-    if (chartInstance) {
-      chartInstance.dispose();
-      chartInstance = null;
-    }
-    if (baselineChartInstance) {
-      baselineChartInstance.dispose();
-      baselineChartInstance = null;
-    }
+    disposeCharts();
   }
 });
 
@@ -888,23 +806,13 @@ watch(historyData, () => {
 }, { deep: true });
 
 watch(
-  [zoomStartValue, zoomEndValue, baselineZoomStart, baselineZoomEnd, () => coreModel.value.chartType],
-  () => {
-  if (showTimeline.value) {
-    updateCharts();
-  }
-});
+  [ zoomRange, baselineZoomRange, chartTypeValue ],
+  () => { if (showTimeline.value) { updateCharts() } }
+);
 
 watch([baselineHistoryData, hasBaselineComparison], () => {
   if (showTimeline.value) {
-    if (chartInstance) {
-      chartInstance.dispose();
-      chartInstance = null;
-    }
-    if (baselineChartInstance) {
-      baselineChartInstance.dispose();
-      baselineChartInstance = null;
-    }
+    disposeCharts();
     nextTick().then(() => {
       initCharts();
     });
@@ -921,8 +829,7 @@ window.addEventListener('resize', handleResize);
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
-  chartInstance?.dispose();
-  baselineChartInstance?.dispose();
+  disposeCharts();
   observer?.disconnect();
 });
 </script>

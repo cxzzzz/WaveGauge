@@ -22,22 +22,22 @@
       <div class="flex items-center gap-2 mb-2">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Waveform Path</span>
         <a-input
-          :value="analysisStore.getWavePath(tab.id)"
-          @update:value="analysisStore.setWavePath(tab.id, $event)"
+          :value="tabState(tab.id).wavePath"
+          @update:value="tabState(tab.id).wavePath = $event"
           size="small"
           placeholder="Enter waveform file path"
           class="!text-xs"
         />
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0] whitespace-nowrap">Sample Every (cycles)</span>
         <a-input-number
-          :value="analysisStore.getSampleRate(tab.id)"
-          @update:value="analysisStore.setSampleRate(tab.id, $event)"
+          :value="tabState(tab.id).sampleRate"
+          @update:value="tabState(tab.id).sampleRate = Number($event ?? 1)"
           size="small"
           :min="1"
           :step="1"
           class="!text-xs w-[120px]"
         />
-        <a-button size="small" @click="analysisStore.setBaselineTab(tab.id)">
+        <a-button size="small" @click="analysisStore.toggleBaselineTab(tab.id)">
           {{ analysisStore.baselineTabId === tab.id ? 'Unset' : 'Set Baseline' }}
         </a-button>
       </div>
@@ -58,11 +58,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import AnalysisGroup from './AnalysisGroup.vue';
-import { useAnalysisStore } from '../stores/analysis';
+import { useAnalysisStore, type TabState } from '../stores/analysis';
 
 type WaveformTab = {
   id: string;
   rootGroup: any;
+};
+
+type History = {
+  timestamps: Array<string | number>;
+  values: Record<string, number[]>;
 };
 
 const createRootGroup = () => ({
@@ -84,13 +89,14 @@ const createRootGroup = () => ({
               type: 'analysis',
               core: {
                 name: 'Compute (SM) Throughput [%]',
-                transformCode: '# Load waveform\nsm = W(\'top.sm_active\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "sm_active": sm.value\n})',
+                description: '',
+                transformCode: '# Load waveform\nsm = W(\'top.sm_active\', clock=\'top.clk\')\nsm\n',
                 chartType: 'line',
                 summaryType: 'avg',
-                maxValue: undefined
+                maxValue: Number.NaN
               },
               context: {
-                history: []
+                history: { timestamps: [], values: {} }
               }
             },
             {
@@ -105,13 +111,14 @@ const createRootGroup = () => ({
                     type: 'analysis',
                     core: {
                       name: 'Memory Throughput [%]',
-                      transformCode: '# Load waveforms\nwaves = WS([\'top.dram_read\', \'top.dram_write\'], clock=\'top.clk\')\nread = waves[0]\nwrite = waves[1]\ndata = pd.DataFrame({\n  "dram_read": read.value,\n  "dram_write": write.value\n})',
+                      description: '',
+                      transformCode: '# Load waveforms\nwaves = WS([\'top.dram_read\', \'top.dram_write\'], clock=\'top.clk\')\nread = waves[0]\nwrite = waves[1]\n{\n  "dram_read": read,\n  "dram_write": write\n}',
                       chartType: 'bar',
                       summaryType: 'avg',
-                      maxValue: undefined
+                      maxValue: Number.NaN
                     },
                     context: {
-                      history: []
+                      history: { timestamps: [], values: {} }
                     }
                   },
                   {
@@ -119,13 +126,14 @@ const createRootGroup = () => ({
                     type: 'analysis',
                     core: {
                       name: 'L2 Cache Breakdown',
-                      transformCode: '# Load waveform\nl2 = W(\'top.l2_hit\', clock=\'top.clk\')\ndata = pd.DataFrame({\n  "l2_hit": l2.value\n})',
+                      description: '',
+                      transformCode: '# Load waveform\nl2 = W(\'top.l2_hit\', clock=\'top.clk\')\n{\n  "l2_hit": l2\n}',
                       chartType: 'heatmap',
                       summaryType: 'avg',
-                      maxValue: undefined
+                      maxValue: Number.NaN
                     },
                     context: {
-                      history: []
+                      history: { timestamps: [], values: {} }
                     }
                   }
                 ]
@@ -139,72 +147,9 @@ const createRootGroup = () => ({
 });
 
 const waveformTabs = ref<WaveformTab[]>([
-  {
-    id: 'waveform-1',
-    rootGroup: createRootGroup()
-  }
 ]);
-const analysisStore = useAnalysisStore();
-const firstTab = waveformTabs.value[0];
-if (firstTab) {
-  analysisStore.ensureTab(firstTab.id);
-  analysisStore.setWavePath(firstTab.id, '/home/cxzzzz/Programming/hardware/WaveGauge/backend/sample.vcd');
-  analysisStore.setSampleRate(firstTab.id, 1);
-  if (!analysisStore.baselineTabId) {
-    analysisStore.setBaselineTab(firstTab.id);
-  }
-}
-const activeTabId = ref('waveform-1');
-const nextTabIndex = ref(2);
-
-const getBaseName = (path: string) => {
-  const fileName = path.split('/').pop() ?? '';
-  const base = fileName.replace(/\.[^/.]+$/, '');
-  return base || 'Waveform';
-};
-
-const tabNames = computed(() => {
-  const counts: Record<string, number> = {};
-  const result: Record<string, string> = {};
-  waveformTabs.value.forEach((tab) => {
-    const base = getBaseName(analysisStore.getWavePath(tab.id));
-    const count = counts[base] ?? 0;
-    counts[base] = count + 1;
-    result[tab.id] = count === 0 ? base : `${base}-${count}`;
-  });
-  return result;
-});
-
-const buildGroupPath = (parentPath: string, groupName: string) => {
-  if (!groupName) return parentPath;
-  return parentPath ? `${parentPath}/${groupName}` : groupName;
-};
-
-const buildSignature = (groupPath: string, analysisName: string) => {
-  return groupPath ? `${groupPath}/${analysisName}` : analysisName;
-};
-
-const baselineMap = computed(() => {
-  const baselineTab = waveformTabs.value.find(tab => tab.id === analysisStore.baselineTabId);
-  if (!baselineTab) return {};
-  const map: Record<string, { history: any[] | undefined }> = {};
-
-  const walk = (node: any, path: string) => {
-    if (node?.type === 'group') {
-      const nextPath = buildGroupPath(path, node.core?.name ?? '');
-      (node.core?.children ?? []).forEach((child: any) => walk(child, nextPath));
-      return;
-    }
-    if (node?.type === 'analysis') {
-      const signature = buildSignature(path, node.core?.name ?? '');
-      map[signature] = { history: node.context?.history };
-    }
-  };
-
-  walk(baselineTab.rootGroup, '');
-  return map;
-});
-
+const activeTabId = ref('');
+const nextTabIndex = ref(0);
 const addWaveformTab = () => {
   const id = `waveform-${nextTabIndex.value}`;
   nextTabIndex.value += 1;
@@ -212,15 +157,61 @@ const addWaveformTab = () => {
     id,
     rootGroup: createRootGroup()
   });
-  analysisStore.ensureTab(id);
-  analysisStore.setWavePath(id, '');
-  analysisStore.setSampleRate(id, 1);
+  analysisStore.addTab(id);
   activeTabId.value = id;
 };
 
-const handleTabEdit = (_targetKey: string | MouseEvent, action: 'add' | 'remove') => {
+const tabState = (id: string) => analysisStore.tabs[id] as TabState;
+const analysisStore = useAnalysisStore();
+addWaveformTab();
+
+const tabNames = computed(() => {
+  const counts: Record<string, number> = {};
+  const result: Record<string, string> = {};
+  waveformTabs.value.forEach((tab) => {
+    const fileName = tabState(tab.id).wavePath.split('/').pop() ?? '';
+    const base = fileName.replace(/\.[^/.]+$/, '') || 'Waveform';
+    const count = counts[base] ?? 0;
+    counts[base] = count + 1;
+    result[tab.id] = count === 0 ? base : `${base}-${count}`;
+  });
+  return result;
+});
+
+const baselineMap = computed(() => {
+  const baselineTab = waveformTabs.value.find(tab => tab.id === analysisStore.baselineTabId);
+  if (!baselineTab) return {};
+  const map: Record<string, { history: History }> = {};
+
+  const walk = (node: any, path: string) => {
+    if (node.type === 'group') {
+      const nextPath = path ? `${path}/${node.core.name}` : node.core.name;
+      node.core.children.forEach((child: any) => walk(child, nextPath));
+      return;
+    }
+    if (node.type === 'analysis') {
+      const signature = path ? `${path}/${node.core.name}` : node.core.name;
+      map[signature] = { history: node.context.history };
+    }
+  };
+
+  walk(baselineTab.rootGroup, '');
+  return map;
+});
+
+
+const handleTabEdit = (targetKey: string | MouseEvent, action: 'add' | 'remove') => {
   if (action === 'add') {
     addWaveformTab();
+    return;
+  }
+  const id = String(targetKey);
+  const index = waveformTabs.value.findIndex(tab => tab.id === id);
+  if (index === -1) return;
+  waveformTabs.value.splice(index, 1);
+  analysisStore.removeTab(id);
+  if (activeTabId.value === id) {
+    activeTabId.value = waveformTabs.value[0]?.id ?? '';
   }
 };
 
