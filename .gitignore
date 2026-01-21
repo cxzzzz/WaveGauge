@@ -30,6 +30,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 
