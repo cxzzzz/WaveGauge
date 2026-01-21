@@ -50,6 +50,7 @@ coverage/
 # Editor directories and files
 .idea/
 .vscode/
+.trae/
 *.swp
 *.swo
 *.swn
