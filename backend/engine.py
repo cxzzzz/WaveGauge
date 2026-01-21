@@ -77,9 +77,16 @@ class AnalysisEngine:
 
     def analyze(self, transform_code: str, sample_rate: int = 1) -> dict[str, Any]:
         processed_data = self.execute_transform(transform_code)
-        processed_data = {'': processed_data} if not isinstance(processed_data, dict) else processed_data
+        
+        is_multivalue = isinstance(processed_data, dict)
+        if not is_multivalue:
+            processed_data = {'value': processed_data}
 
-        result: dict[str, Any] = {'timestamps': None, 'values': {}}
+        result: dict[str, Any] = {
+            'timestamps': None, 
+            'values': {},
+            'is_multivalue': is_multivalue
+        }
 
         for key, value in processed_data.items():
             assert isinstance(value, Waveform), f'Expected Waveform value for key {key}'
@@ -91,8 +98,5 @@ class AnalysisEngine:
                 assert result['timestamps'] is None or np.array_equal(
                     sampled_wave.time, result['timestamps']
                 ), 'Sampled timestamps mismatch'
-        
-        if len(result['values']) == 1 and '' in result['values']:
-            result['values'] = result['values']['']
         
         return result

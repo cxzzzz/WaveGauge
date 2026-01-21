@@ -232,7 +232,6 @@ import ProgressValueDisplay from './ProgressValueDisplay.vue';
 import { useAnalysisStore, type ZoomRange } from '../stores/analysis';
 
 const API_URL = '/api';
-const SINGLE_VALUE_KEY = '__single__';
 const MIN_EDITOR_HEIGHT = 50;
 
 type AnalysisCore = {
@@ -356,7 +355,7 @@ const effectiveMax = computed(() => {
 });
 
 const getMaxValueForDisplay = (key: string) => {
-  if (key === SINGLE_VALUE_KEY) return Number(effectiveMax.value) || 0;
+  if (!isMultiValue.value) return Number(effectiveMax.value) || 0;
   return Number(getMaxForKey(key)) || 0;
 };
 
@@ -434,11 +433,11 @@ const runAnalysis = async () => {
 
       const payload = response.data.data as {
         timestamps: Array<number>;
-        values: Record<string, number[]> | number[];
+        values: Record<string, number[]>;
+        is_multivalue: boolean;
       };
-      isMultiValue.value = !Array.isArray(payload.values);
-      const valuesMap = Array.isArray(payload.values) ? { [SINGLE_VALUE_KEY]: payload.values } : payload.values;
-      const newHistory: History = { timestamps: payload.timestamps, values: valuesMap };
+      isMultiValue.value = payload.is_multivalue;
+      const newHistory: History = { timestamps: payload.timestamps, values: payload.values };
       updateContext({ history: newHistory });
     } else {
       message.destroy();
