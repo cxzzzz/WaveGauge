@@ -26,6 +26,7 @@ class AnalyzeRequest(BaseModel):
     file_path: str
     transform_code: str = ""
     sample_rate: int = 1
+    compressed: bool = False
 
 
 engines: dict[str, AnalysisEngine] = {}
@@ -69,7 +70,7 @@ async def analyze(req: AnalyzeRequest):
     try:
         print(req)
         engine = get_engine(req.file_path)
-        table_data = engine.analyze(req.transform_code, req.sample_rate)
+        table_data = engine.analyze(req.transform_code, req.sample_rate, req.compressed)
 
         return {
             "status": "success",

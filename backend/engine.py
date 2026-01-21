@@ -75,12 +75,17 @@ class AnalysisEngine:
             self.reader.__exit__(None, None, None)
             self.reader = None
 
-    def analyze(self, transform_code: str, sample_rate: int = 1) -> dict[str, Any]:
+    def _normalize_transform_result(self, transform_code: str) -> tuple[dict[str, Waveform], bool]:
         processed_data = self.execute_transform(transform_code)
         
         is_multivalue = isinstance(processed_data, dict)
         if not is_multivalue:
             processed_data = {'value': processed_data}
+            
+        return processed_data, is_multivalue
+
+    def analyze(self, transform_code: str, sample_rate: int = 1, compressed: bool = False) -> dict[str, Any]:
+        processed_data, is_multivalue = self._normalize_transform_result(transform_code)
 
         result: dict[str, Any] = {
             'timestamps': None, 
@@ -88,15 +93,45 @@ class AnalysisEngine:
             'is_multivalue': is_multivalue
         }
 
-        for key, value in processed_data.items():
-            assert isinstance(value, Waveform), f'Expected Waveform value for key {key}'
-            sampled_wave = value.sample(sample_rate, func=np.mean)
-            result['values'][key] = sampled_wave.value.tolist()
-            if result['timestamps'] is None:
-                result['timestamps'] = sampled_wave.time.tolist()
-            else:
-                assert result['timestamps'] is None or np.array_equal(
-                    sampled_wave.time, result['timestamps']
-                ), 'Sampled timestamps mismatch'
+        if compressed:
+            # 1. Compress all waveforms first
+            compressed_waves = {}
+            all_timestamps = []
+            
+            for key, value in processed_data.items():
+                assert isinstance(value, Waveform), f'Expected Waveform value for key {key}'
+                c_wave = value.compress()
+                compressed_waves[key] = c_wave
+                all_timestamps.append(c_wave.time)
+            
+            if not all_timestamps:
+                result['timestamps'] = []
+                return result
+
+            # 2. Compute union of all timestamps
+            unified_timestamps = np.unique(np.concatenate(all_timestamps))
+            # np.unique returns sorted array
+            
+            result['timestamps'] = unified_timestamps.tolist()
+
+            # 3. Resample all waveforms to unified timestamps using Zero-Order Hold
+            for key, wave in compressed_waves.items():
+                # searchsorted(side='right') - 1 gives the index of the latest timestamp <= t
+                indices = np.searchsorted(wave.time, unified_timestamps, side='right') - 1
+                indices = np.maximum(indices, 0)
+                result['values'][key] = wave.value[indices].tolist()
+
+        else:
+            # Original resampling logic
+            for key, value in processed_data.items():
+                assert isinstance(value, Waveform), f'Expected Waveform value for key {key}'
+                sampled_wave = value.sample(sample_rate, func=np.mean)
+                result['values'][key] = sampled_wave.value.tolist()
+                if result['timestamps'] is None:
+                    result['timestamps'] = sampled_wave.time.tolist()
+                else:
+                    assert result['timestamps'] is None or np.array_equal(
+                        sampled_wave.time, result['timestamps']
+                    ), 'Sampled timestamps mismatch'
         
         return result

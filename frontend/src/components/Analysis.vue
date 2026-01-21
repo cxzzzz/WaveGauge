@@ -423,7 +423,8 @@ const runAnalysis = async () => {
     const response = await axios.post(`${API_URL}/analyze`, {
       file_path: wavePath.value,
       transform_code: transformCode.value,
-      sample_rate: sampleRate.value
+      sample_rate: sampleRate.value,
+      compressed: false
     });
 
     if (response.data.status === 'success') {
