@@ -422,9 +422,14 @@ const handleImport = (event: Event) => {
               throw new Error('Invalid analysis summaryType');
             }
             const description = typeof source.description === 'string' ? source.description : '';
-            const maxValue = Number.isFinite(Number(source.maxValue))
-              ? Number(source.maxValue)
-              : Number.NaN;
+            let maxValue = Number.NaN;
+            // JSON.stringify converts NaN to null, so we need to handle null as NaN (Auto)
+            if (source.maxValue !== null && source.maxValue !== undefined) {
+              const val = Number(source.maxValue);
+              if (Number.isFinite(val)) {
+                maxValue = val;
+              }
+            }
             item.core = {
               name: source.name,
               transformCode: source.transformCode,
