@@ -21,10 +21,14 @@ fi
 
 deactivate
 
-cd "$FRONTEND_DIR"
-if [ "$NPM_INCLUDE_DEV" = "1" ]; then
-  npm ci --include=dev
+if [ "${SKIP_FRONTEND:-0}" = "1" ] || [ ! -f "$FRONTEND_DIR/package.json" ]; then
+  echo "Skipping frontend build (SKIP_FRONTEND=1 or package.json not found)."
 else
-  npm ci
+  cd "$FRONTEND_DIR"
+  if [ "$NPM_INCLUDE_DEV" = "1" ]; then
+    npm ci --include=dev
+  else
+    npm ci
+  fi
+  NODE_ENV="$NODE_ENV" npm run build
 fi
-NODE_ENV="$NODE_ENV" npm run build

@@ -11,10 +11,13 @@ FRONTEND_DIR ?= $(ROOT_DIR)/frontend
 NODE_ENV ?= production
 PIP_INDEX_URL ?=
 
-.PHONY: build run
+.PHONY: build run package
 
 build:
 	PYTHON_BIN=$(PYTHON_BIN) VENV_DIR=$(VENV_DIR) PIP_INDEX_URL=$(PIP_INDEX_URL) NODE_ENV=$(NODE_ENV) FRONTEND_DIR=$(FRONTEND_DIR) $(ROOT_DIR)/scripts/build.sh
+
+package:
+	$(ROOT_DIR)/scripts/package.sh
 
 run:
 	HOST=$(HOST) PORT=$(PORT) WORKERS=$(WORKERS) APP_MODULE=$(APP_MODULE) VENV_DIR=$(VENV_DIR) $(ROOT_DIR)/scripts/run.sh
