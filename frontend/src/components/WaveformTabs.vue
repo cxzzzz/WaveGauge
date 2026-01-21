@@ -12,11 +12,21 @@
       :closable="false"
     >
       <template #tab>
-        <span class="inline-flex items-center gap-1">
-          <span>{{ tabNames[tab.id] }}</span>
-          <a-tag v-if="analysisStore.baselineTabId === tab.id" color="blue" class="!text-[10px] !px-1 !py-0">
-            BL
-          </a-tag>
+        <span class="flex items-center justify-between w-full">
+          <span class="inline-flex items-center gap-1">
+            <span>{{ tabNames[tab.id] }}</span>
+            <a-tag v-if="analysisStore.baselineTabId === tab.id" color="blue" class="!text-[10px] !px-1 !py-0">
+              BL
+            </a-tag>
+          </span>
+          <a-button
+            type="text"
+            size="small"
+            class="!px-1"
+            @click.stop="removeTab(tab.id)"
+          >
+            <close-outlined class="text-[10px] !m-auto"  />
+          </a-button>
         </span>
       </template>
       <div class="flex items-center gap-2 mb-2">
@@ -62,6 +72,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { CloseOutlined } from '@ant-design/icons-vue';
 import AnalysisGroup from './AnalysisGroup.vue';
 import { useAnalysisStore, type TabState } from '../stores/analysis';
 
@@ -184,6 +195,17 @@ const addWaveformTab = () => {
   activeTabId.value = id;
 };
 
+const removeTab = (id: string) => {
+  const index = waveformTabs.value.findIndex(tab => tab.id === id);
+  if (index === -1) return;
+  waveformTabs.value.splice(index, 1);
+  analysisStore.removeTab(id);
+  if (activeTabId.value === id) {
+    const firstTab = waveformTabs.value[0];
+    activeTabId.value = firstTab ? firstTab.id : '';
+  }
+};
+
 const tabState = (id: string) => analysisStore.tabs[id] as TabState;
 const analysisStore = useAnalysisStore();
 addWaveformTab();
@@ -231,14 +253,7 @@ const handleTabEdit = (targetKey: string | MouseEvent, action: 'add' | 'remove')
     return;
   }
   const id = String(targetKey);
-  const index = waveformTabs.value.findIndex(tab => tab.id === id);
-  if (index === -1) return;
-  waveformTabs.value.splice(index, 1);
-  analysisStore.removeTab(id);
-  if (activeTabId.value === id) {
-    const firstTab = waveformTabs.value[0];
-    activeTabId.value = firstTab ? firstTab.id : '';
-  }
+  removeTab(id);
 };
 
 </script>
