@@ -210,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, toRef, unref } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, toRef} from 'vue';
 import { 
   CodeOutlined, 
   UpOutlined, 
@@ -231,7 +231,7 @@ import { message } from 'ant-design-vue';
 import ProgressValueDisplay from './ProgressValueDisplay.vue';
 import { useAnalysisStore, type ZoomRange } from '../stores/analysis';
 
-const API_URL = 'http://localhost:8000/api';
+const API_URL = '/api';
 const SINGLE_VALUE_KEY = '__single__';
 const MIN_EDITOR_HEIGHT = 50;
 

@@ -1,0 +1,20 @@
+SHELL := /bin/bash
+
+HOST ?= 0.0.0.0
+PORT ?= 8000
+WORKERS ?= 2
+APP_MODULE ?= backend.app:app
+PYTHON_BIN ?= python3
+ROOT_DIR ?= $(CURDIR)
+VENV_DIR ?= $(ROOT_DIR)/backend/.venv
+FRONTEND_DIR ?= $(ROOT_DIR)/frontend
+NODE_ENV ?= production
+PIP_INDEX_URL ?=
+
+.PHONY: build run
+
+build:
+	PYTHON_BIN=$(PYTHON_BIN) VENV_DIR=$(VENV_DIR) PIP_INDEX_URL=$(PIP_INDEX_URL) NODE_ENV=$(NODE_ENV) FRONTEND_DIR=$(FRONTEND_DIR) $(ROOT_DIR)/scripts/build.sh
+
+run:
+	HOST=$(HOST) PORT=$(PORT) WORKERS=$(WORKERS) APP_MODULE=$(APP_MODULE) VENV_DIR=$(VENV_DIR) $(ROOT_DIR)/scripts/run.sh
