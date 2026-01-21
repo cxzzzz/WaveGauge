@@ -23,9 +23,10 @@ export const useAnalysisStore = defineStore('analysis', {
   }),
   actions: {
     addTab(id: string) {
+      const isFirstTab = Object.keys(this.tabs).length === 0;
       this.tabs[id] = {
         zoom: { start: 0, end: Number.MAX_SAFE_INTEGER},
-        wavePath: '',
+        wavePath: isFirstTab ? 'data/samples/sample.vcd' : '',
         sampleRate: 1
       };
     },

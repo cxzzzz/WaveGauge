@@ -75,7 +75,17 @@ type History = {
   values: Record<string, number[]>;
 };
 
-const createRootGroup = () => ({
+const createEmptyRootGroup = () => ({
+  id: 'root',
+  type: 'group',
+  core: {
+    name: '',
+    collapsed: false,
+    children: []
+  }
+});
+
+const createExampleRootGroup = () => ({
   id: 'root',
   type: 'group',
   core: {
@@ -117,7 +127,7 @@ const createRootGroup = () => ({
                     core: {
                       name: 'Memory Throughput [%]',
                       description: '',
-                      transformCode: '# Load waveforms\nwaves = WS([\'top.dram_read\', \'top.dram_write\'], clock=\'top.clk\')\nread = waves[0]\nwrite = waves[1]\n{\n  "dram_read": read,\n  "dram_write": write\n}',
+                      transformCode: '# Load waveforms\nread = W(\'top.dram_read\', clock=\'top.clk\')\nwrite = W(\'top.dram_write\', clock=\'top.clk\')\n{\n  "dram_read": read,\n  "dram_write": write\n}',
                       chartType: 'bar',
                       summaryType: 'avg',
                       maxValue: Number.NaN
@@ -164,10 +174,11 @@ const updateSampleRate = (id: string, value: unknown) => {
 };
 const addWaveformTab = () => {
   const id = `waveform-${nextTabIndex.value}`;
+  const isFirstTab = waveformTabs.value.length === 0;
   nextTabIndex.value += 1;
   waveformTabs.value.push({
     id,
-    rootGroup: createRootGroup()
+    rootGroup: isFirstTab ? createExampleRootGroup() : createEmptyRootGroup()
   });
   analysisStore.addTab(id);
   activeTabId.value = id;
