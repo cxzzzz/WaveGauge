@@ -202,6 +202,8 @@ const isEditingName = ref(false);
 const nameInput = ref<any>(null);
 const childRefs = ref(new Map<string, any>());
 const groupPathModel = computed(() => contextModel.value.groupPath);
+const EMPTY_HISTORY = { timestamps: [], values: {} };
+
 const buildAnalysisContext = (child: any) => {
   const signature = groupPathModel.value
     ? `${groupPathModel.value}/${child.core.name}`
@@ -209,7 +211,7 @@ const buildAnalysisContext = (child: any) => {
   const baselineEntry = contextModel.value.baselineMap[signature];
   return {
     history: child.context.history,
-    baselineHistory: baselineEntry ? baselineEntry.history : { timestamps: [], values: {} },
+    baselineHistory: baselineEntry ? baselineEntry.history : EMPTY_HISTORY,
     tabId: contextModel.value.tabId
   };
 };

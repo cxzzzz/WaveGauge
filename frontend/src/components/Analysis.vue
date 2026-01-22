@@ -782,11 +782,21 @@ watch(showTimeline, async (val) => {
   }
 });
 
+watch([zoomRange, baselineZoomRange], () => {
+  if (showTimeline.value) { updateCharts() }
+}, { deep: true });
+
 watch(
-  [historyData, zoomRange, baselineZoomRange, chartTypeValue ],
-  () => { 
-    if (showTimeline.value) { updateCharts() } }
-  , { deep: true }
+  [historyData, chartTypeValue, maxValueValue],
+  ([newHistory, newType, newMax], [oldHistory, oldType, oldMax]) => {
+    const isHistoryChanged = newHistory !== oldHistory;
+    const isTypeChanged = newType !== oldType;
+    const isMaxChanged = newMax !== oldMax && !(Number.isNaN(Number(newMax)) && Number.isNaN(Number(oldMax)));
+
+    if (isHistoryChanged || isTypeChanged || isMaxChanged) {
+      if (showTimeline.value) { updateCharts() } 
+    }
+  }
 );
 
 watch([baselineHistoryData, hasBaselineComparison], () => {
@@ -796,7 +806,7 @@ watch([baselineHistoryData, hasBaselineComparison], () => {
       initCharts();
     });
   }
-}, { deep: true });
+});
 
 // Handle Resize
 const handleResize = () => {
