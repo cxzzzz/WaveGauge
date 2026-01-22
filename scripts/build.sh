@@ -14,9 +14,9 @@ cd "$ROOT_DIR/backend"
 source "$VENV_DIR/bin/activate"
 
 if [ -n "$PIP_INDEX_URL" ]; then
-  pip install --index-url "$PIP_INDEX_URL" -r requirements.txt
+  pip install --index-url "$PIP_INDEX_URL" .
 else
-  pip install -r requirements.txt
+  pip install .
 fi
 
 deactivate
