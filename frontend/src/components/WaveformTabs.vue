@@ -139,6 +139,22 @@ const createExampleRootGroup = () => ({
               }
             },
             {
+              id: 'a1-complete',
+              type: 'analysis',
+              core: {
+                name: 'Complete Timeline (State)',
+                description: '',
+                transformCode: '# Load state waveform\nstate = W(\'top.inst_state\', clock=\'top.clk\')\nstate\n',
+                chartType: 'timeline',
+                summaryType: 'count',
+                maxValue: Number.NaN,
+                analysisType: 'complete'
+              },
+              context: {
+                data: null
+              }
+            },
+            {
               id: 'g2',
               type: 'group',
               core: {

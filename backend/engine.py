@@ -269,7 +269,7 @@ class AnalysisEngine:
             events = value.filter(lambda x: x != 0)
             series[key] = CompleteSeries(
                 timestamps=events.time.tolist(),
-                values=events.map(lambda x: 0).value.tolist(),
+                values=events.map(lambda x: x-x).value.tolist(),
                 durations=events.value.tolist(),
             )
 
@@ -277,37 +277,3 @@ class AnalysisEngine:
             series=series,
             is_multiseries=is_multivalue,
         )
-
-
-def log_exceptions(func):
-    """Decorator to log full traceback of exceptions before they are caught by asteval."""
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            print(f"Exception in {func.__name__}:", file=sys.stderr)
-            traceback.print_exc()
-            raise e
-    return wrapper
-
-class LoggedModule:
-    """Proxy for a module that wraps all callable attributes with log_exceptions."""
-    def __init__(self, module: Any):
-        self._module = module
-
-    def __getattr__(self, name: str) -> Any:
-        attr = getattr(self._module, name)
-        # 递归处理子模块 (e.g. np.random)
-        if isinstance(attr, types.ModuleType):
-            return LoggedModule(attr)
-        # 自动包装普通函数 (e.g. np.array)
-        if callable(attr) and not isinstance(attr, type):
-            return log_exceptions(attr)
-        return attr
-    
-    def __dir__(self):
-        return dir(self._module)
-    
-    def __repr__(self):
-        return repr(self._module)

@@ -479,10 +479,10 @@ let resizeBound = false;
 
 const createChartInstance = (
   target: HTMLElement,
-  onZoom: (event: any) => void
+  zoomRangeRef: { value: ZoomRange }
 ) => {
   const instance = echarts.init(target);
-  instance.on('datazoom', onZoom);
+  instance.on('datazoom', (event: any) => updateZoomFromEvent(event, zoomRangeRef, instance));
   return instance;
 };
 
@@ -517,11 +517,9 @@ const applyChartOption = (
 };
 
 const initCharts = () => {
-  chartInstance = createChartInstance(chartRef.value!, 
-    (event: any) => updateZoomFromEvent(event, zoomRange));
+  chartInstance = createChartInstance(chartRef.value!, zoomRange);
   if (hasBaselineComparison.value) {
-    baselineChartInstance = createChartInstance(baselineChartRef.value!, 
-    (event: any) => updateZoomFromEvent(event, baselineZoomRange));
+    baselineChartInstance = createChartInstance(baselineChartRef.value!, baselineZoomRange);
   }
   if (!resizeBound) {
     window.addEventListener('resize', handleResize);
@@ -538,12 +536,36 @@ const updateCharts = () => {
 };
 
 const updateZoomFromEvent = (
-  event: { start: number, end: number },
+  event: any,
   zoomRangeRef: { value: ZoomRange },
+  instance: echarts.ECharts
 ) => {
   if (isSettingZoom.value) return;
-  zoomRangeRef.value.start = event.start;
-  zoomRangeRef.value.end = event.end;
+  const payload = Array.isArray(event?.batch) && event.batch.length ? event.batch[0] : event;
+  const start = Number(payload?.start);
+  const end = Number(payload?.end);
+  if (Number.isFinite(start) && Number.isFinite(end)) {
+    zoomRangeRef.value.start = start;
+    zoomRangeRef.value.end = end;
+    return;
+  }
+  const startValue = Number(payload?.startValue);
+  const endValue = Number(payload?.endValue);
+  if (!Number.isFinite(startValue) || !Number.isFinite(endValue)) {
+    return;
+  }
+  const option = instance.getOption();
+  const xAxis = Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis;
+  const min = Number((xAxis as any)?.min);
+  const max = Number((xAxis as any)?.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    return;
+  }
+  const range = max - min;
+  const nextStart = ((startValue - min) / range) * 100;
+  const nextEnd = ((endValue - min) / range) * 100;
+  zoomRangeRef.value.start = Math.max(0, Math.min(100, nextStart));
+  zoomRangeRef.value.end = Math.max(0, Math.min(100, nextEnd));
 };
 
 // Watch theme changes
