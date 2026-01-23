@@ -136,6 +136,18 @@
       <div class="mb-2 flex items-center gap-3">
         <div class="flex items-center gap-2">
           <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            Analysis Type
+          </div>
+          <a-select
+            :value="analysisType"
+            size="small"
+            class="!text-xs w-[140px]"
+            :options="analysisTypeOptions"
+            @update:value="handleAnalysisTypeChange($event)"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             Chart Type
           </div>
           <a-select
@@ -295,8 +307,21 @@ if (!strategyRegistry) {
   throw new Error('Analysis strategy registry is not provided');
 }
 const analysisStrategy = computed(() => strategyRegistry.getStrategy(analysisType.value));
+const analysisTypeOptions = computed(() =>
+  strategyRegistry.getTypes().map((type) => ({ label: type, value: type }))
+);
 const chartTypeOptions = computed(() => analysisStrategy.value.chartTypeOptions);
 const summaryTypeOptions = computed(() => analysisStrategy.value.summaryTypeOptions);
+const handleAnalysisTypeChange = (value: AnalysisType) => {
+  const nextStrategy = strategyRegistry.getStrategy(value);
+  const nextChartType = nextStrategy.chartTypeOptions[0]?.value ?? chartTypeValue.value;
+  const nextSummaryType = nextStrategy.summaryTypeOptions[0]?.value ?? summaryTypeValue.value;
+  updateCore({
+    analysisType: value,
+    chartType: nextChartType,
+    summaryType: nextSummaryType
+  });
+};
 
 const summaryValues = computed(() =>
   analysisStrategy.value.calculateSummary({

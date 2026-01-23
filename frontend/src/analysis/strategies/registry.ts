@@ -19,6 +19,10 @@ export class AnalysisStrategyRegistry {
   getStrategy(type: AnalysisType): AnalysisStrategy<unknown> {
     return this.strategies[type];
   }
+
+  getTypes(): AnalysisType[] {
+    return Object.keys(this.strategies) as AnalysisType[];
+  }
 }
 
 export const analysisStrategyRegistryKey: InjectionKey<AnalysisStrategyRegistry> = Symbol(
