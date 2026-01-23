@@ -420,11 +420,10 @@ const runAnalysis = async () => {
   message.loading(`Running analysis for ${name.value}...`, 0);
   
   try {
-    const response = await axios.post(`${API_URL}/analyze`, {
+    const response = await axios.post(`${API_URL}/analyze/counter`, {
       file_path: wavePath.value,
       transform_code: transformCode.value,
-      sample_rate: sampleRate.value,
-      compressed: false
+      sample_rate: sampleRate.value
     });
 
     if (response.data.status === 'success') {
