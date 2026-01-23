@@ -210,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, toRef} from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, toRef, inject } from 'vue';
 import { 
   CodeOutlined, 
   UpOutlined, 
@@ -226,10 +226,15 @@ import * as echarts from 'echarts';
 import { Codemirror } from 'vue-codemirror';
 import { python } from '@codemirror/lang-python';
 import { oneDark } from '@codemirror/theme-one-dark';
-import axios from 'axios';
 import { message } from 'ant-design-vue';
 import ProgressValueDisplay from './ProgressValueDisplay.vue';
 import { useAnalysisStore, type ZoomRange } from '../stores/analysis';
+import {
+  analysisStrategyRegistryKey,
+  type AnalysisStrategyRegistry,
+  type AnalysisType,
+  type History
+} from '../analysis/strategies';
 
 const API_URL = '/api';
 const MIN_EDITOR_HEIGHT = 50;
@@ -241,11 +246,7 @@ type AnalysisCore = {
   chartType: string;
   summaryType: string;
   maxValue: number;
-};
-
-type History = {
-  timestamps: Array<number>;
-  values: Record<string, number[]>;
+  analysisType?: AnalysisType;
 };
 
 type AnalysisContext = {
@@ -278,19 +279,7 @@ const isEditingName = ref(false);
 const localName = ref(props.core.name);
 const nameInput = ref<HTMLInputElement | null>(null);
 const errorMessage = ref('');
-const chartTypeOptions = [
-  { label: 'Bar', value: 'bar' },
-  { label: 'Stacked Bar', value: 'stacked_bar' },
-  { label: 'Line', value: 'line' },
-  { label: 'Stacked Line', value: 'stacked_line' },
-  { label: 'Heatmap', value: 'heatmap' }
-];
-const summaryTypeOptions = [
-  { label: 'Average', value: 'avg' },
-  { label: 'Maximum', value: 'max' },
-  { label: 'Minimum', value: 'min' },
-  { label: 'Sum', value: 'sum' }
-];
+const analysisType = computed<AnalysisType>(() => props.core.analysisType ?? 'counter');
 const chartTypeValue = computed(() => props.core.chartType);
 const summaryTypeValue = computed(() => props.core.summaryType);
 const maxValueValue = computed(() => props.core.maxValue);
@@ -300,9 +289,18 @@ const analysisStore = useAnalysisStore();
 const tabId = computed(() => props.context.tabId);
 const tabState = toRef(analysisStore.tabs, tabId.value);
 const zoomRange = toRef(tabState.value, 'zoom');
+const strategyRegistry = inject(analysisStrategyRegistryKey) as AnalysisStrategyRegistry | undefined;
+if (!strategyRegistry) {
+  throw new Error('Analysis strategy registry is not provided');
+}
+const analysisStrategy = computed(() => strategyRegistry.getStrategy(analysisType.value));
+const chartTypeOptions = computed(() => analysisStrategy.value.chartTypeOptions);
+const summaryTypeOptions = computed(() => analysisStrategy.value.summaryTypeOptions);
 
 const visibleHistory = computed(() => getVisibleHistory(historyData.value, zoomRange.value));
-const summaryValues = computed(() => calculateSummary(visibleHistory.value, summaryTypeValue.value));
+const summaryValues = computed(() =>
+  analysisStrategy.value.calculateSummary(visibleHistory.value, summaryTypeValue.value)
+);
 const wavePath = computed<string>(() => {
   return tabState.value.wavePath;
 });
@@ -324,10 +322,12 @@ const baselineZoomRange = ref<ZoomRange>({start: 0, end: Number.MIN_SAFE_INTEGER
 const baselineVisibleHistory = computed(() => {
   return getVisibleHistory(baselineHistoryData.value, baselineZoomRange.value);
 });
-const baselineSummaryValues = computed(() => calculateSummary(
-  baselineVisibleHistory.value,
-  summaryTypeValue.value
-));
+const baselineSummaryValues = computed(() =>
+  analysisStrategy.value.calculateSummary(
+    baselineVisibleHistory.value,
+    summaryTypeValue.value
+  )
+);
 
 const getMaxFromHistory = (history: History, key: string) => {
   let maxVal = 0;
@@ -420,33 +420,20 @@ const runAnalysis = async () => {
   message.loading(`Running analysis for ${name.value}...`, 0);
   
   try {
-    const response = await axios.post(`${API_URL}/analyze/counter`, {
-      file_path: wavePath.value,
-      transform_code: transformCode.value,
-      sample_rate: sampleRate.value
+    const result = await analysisStrategy.value.runAnalysis({
+      apiUrl: API_URL,
+      wavePath: wavePath.value,
+      transformCode: transformCode.value,
+      sampleRate: sampleRate.value
     });
-
-    if (response.data.status === 'success') {
-      message.destroy();
-      message.success(`Analysis for ${name.value} completed!`);
-      errorMessage.value = '';
-
-      const payload = response.data.data as {
-        timestamps: Array<number>;
-        values: Record<string, number[]>;
-        is_multivalue: boolean;
-      };
-      isMultiValue.value = payload.is_multivalue;
-      const newHistory: History = { timestamps: payload.timestamps, values: payload.values };
-      updateContext({ history: newHistory });
-    } else {
-      message.destroy();
-      const backendError = response.data.error;
-      applyBackendError(backendError, 'Error');
-    }
+    message.destroy();
+    message.success(`Analysis for ${name.value} completed!`);
+    errorMessage.value = '';
+    isMultiValue.value = result.isMultiseries;
+    updateContext({ history: result.history });
   } catch (error: any) {
     message.destroy();
-    const backendError = error.response.data.detail;
+    const backendError = error?.response?.data?.detail ?? error?.message ?? error;
     applyBackendError(backendError, 'Request failed');
   }
 };
@@ -490,27 +477,6 @@ const extensions = computed(() => {
   return isDark.value ? [python(), oneDark] : [python()];
 });
 
-const calculateSummary = (
-  history: History,
-  summaryType: string
-): Record<string, number> => {
-  const keys = Object.keys(history.values);
-
-  const summarize = (values: number[]): number => {
-    const numericValues = values.map(Number).filter(Number.isFinite);
-    if (!numericValues.length) return Number.NaN;
-    if (summaryType === 'max') return Math.max(...numericValues);
-    if (summaryType === 'min') return Math.min(...numericValues);
-    if (summaryType === 'sum') return numericValues.reduce((acc, val) => acc + val, 0);
-    const total = numericValues.reduce((acc, val) => acc + val, 0);
-    return total / numericValues.length;
-  };
-
-  return Object.fromEntries(
-    keys.map(key => [key, summarize(history.values[key]!)])
-  );
-};
-
 const getVisibleHistory = (
   history: History = historyData.value,
   zoomRange: ZoomRange
@@ -538,148 +504,6 @@ const baselineChartRef = ref<HTMLElement | null>(null);
 let baselineChartInstance: echarts.ECharts | null = null;
 let resizeBound = false;
 
-const buildChartOption = (
-  history: History,
-  chartType: string,
-  zoomRange: ZoomRange,
-  userMaxValue: number 
-): echarts.EChartsOption => {
-  const textColor = isDark.value ? '#a0a0a0' : '#666';
-  const axisColor = isDark.value ? '#404040' : '#e0e0e0';
-  const steps = history.timestamps.map(item => String(item));
-  const keys = Object.keys(history.values);
-  const gridBottom = '20%' 
-
-  const realZoomRange = {
-    start: zoomRange.start,
-    end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
-  }
-  const dataZoom: echarts.DataZoomComponentOption[] = [
-    {
-      type: 'inside',
-      xAxisIndex: 0,
-      start: realZoomRange.start,
-      end: realZoomRange.end
-    }, {
-      type: 'slider',
-      xAxisIndex: 0,
-      height: '10%',
-      bottom: '2%',
-      start: realZoomRange.start,
-      end: realZoomRange.end
-    }
-  ];
-
-  const option: echarts.EChartsOption = {
-    backgroundColor: 'transparent',
-    grid: {
-      top: '6%',
-      bottom: gridBottom,
-      left: '6%',
-      right: '6%',
-      containLabel: true
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      backgroundColor: isDark.value ? 'rgba(50,50,50,0.9)' : 'rgba(255,255,255,0.9)',
-      borderColor: isDark.value ? '#555' : '#eee',
-      textStyle: {
-        color: textColor
-      }
-    },
-    xAxis: {
-      type: 'category',
-      data: steps,
-      axisLine: { lineStyle: { color: axisColor } },
-      axisLabel: { color: textColor }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: axisColor } },
-      axisLabel: { color: textColor },
-      splitLine: { lineStyle: { color: isDark.value ? '#333' : '#eee' } },
-      max: Number.isFinite(userMaxValue) ? userMaxValue : undefined
-    },
-    dataZoom,
-    series: []
-  };
-
-  if (chartType === 'heatmap') {
-    const yCategories = keys;
-    const heatmapData: Array<[number, number, number]> = [];
-    let maxValue = 0;
-    yCategories.forEach((key, yIndex) => {
-      steps.forEach((_, xIndex) => {
-        const rawValue = Number(history.values[key]![xIndex]);
-        const value = Number.isFinite(rawValue) ? rawValue : 0;
-        maxValue = Math.max(maxValue, value);
-        heatmapData.push([xIndex, yIndex, value]);
-      });
-    });
-    option.xAxis = {
-      type: 'category',
-      data: steps,
-      axisLine: { lineStyle: { color: axisColor } },
-      axisLabel: { color: textColor }
-    };
-    option.yAxis = {
-      type: 'category',
-      data: yCategories,
-      axisLine: { lineStyle: { color: axisColor } },
-      axisLabel: { color: textColor }
-    };
-    const effectiveMax = Number.isFinite(userMaxValue) ? Number(userMaxValue) : maxValue;
-    option.visualMap = {
-      min: 0,
-      max: Math.max(1, effectiveMax),
-      calculable: true,
-      orient: 'horizontal',
-      left: 'center',
-      top: 0,
-      textStyle: { color: textColor }
-    };
-    option.series = [
-      {
-        type: 'heatmap',
-        data: heatmapData,
-        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.2)' } }
-      }
-    ] as echarts.SeriesOption[];
-  } else {
-    const isStacked = chartType === 'stacked_bar' || chartType === 'stacked_line';
-    const seriesType = chartType.includes('bar') ? 'bar' : 'line';
-    const series = keys.map(key => {
-      const data = steps.map((_, index) => history.values[key]![index]);
-      if (seriesType === 'line') {
-        const lineItem: echarts.LineSeriesOption = {
-          name: key,
-          data,
-          type: 'line',
-          smooth: true,
-          showSymbol: false,
-          areaStyle: { opacity: 0.1 }
-        };
-        if (isStacked) {
-          lineItem.stack = 'total';
-        }
-        return lineItem;
-      }
-      const barItem: echarts.BarSeriesOption = {
-        name: key,
-        data,
-        type: 'bar'
-      };
-      if (isStacked) {
-        barItem.stack = 'total';
-      }
-      return barItem;
-    });
-    option.series = series as echarts.SeriesOption[];
-  }
-  return option;
-};
-
 const createChartInstance = (
   target: HTMLElement,
   onZoom: (event: any) => void
@@ -705,12 +529,13 @@ const applyChartOption = (
   history: History,
   zoomRange: ZoomRange
 ) => {
-  const option = buildChartOption(
+  const option = analysisStrategy.value.buildChartOption({
     history,
-    chartTypeValue.value,
+    chartType: chartTypeValue.value,
     zoomRange,
-    maxValueValue.value
-  );
+    userMaxValue: maxValueValue.value,
+    isDark: isDark.value
+  });
   isSettingZoom.value = true;
   instance.setOption(option);
   setTimeout(() => {

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 from asteval import Interpreter
+from typing_extensions import TypedDict
 from wavekit import Waveform
 
 try:
