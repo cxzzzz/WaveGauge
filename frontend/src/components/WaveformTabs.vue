@@ -81,10 +81,7 @@ type WaveformTab = {
   rootGroup: any;
 };
 
-type History = {
-  timestamps: Array<number>;
-  values: Record<string, number[]>;
-};
+type AnalysisData = unknown;
 
 const createEmptyRootGroup = () => ({
   id: 'root',
@@ -122,7 +119,23 @@ const createExampleRootGroup = () => ({
                 maxValue: Number.NaN
               },
               context: {
-                history: { timestamps: [], values: {} }
+                data: null
+              }
+            },
+            {
+              id: 'a1-evt',
+              type: 'analysis',
+              core: {
+                name: 'Instant Events (Types)',
+                description: '',
+                transformCode: '# Load event waveform\ninst = W(\'top.inst_event\', clock=\'top.clk\')\ninst\n',
+                chartType: 'scatter',
+                summaryType: 'count',
+                maxValue: Number.NaN,
+                analysisType: 'instant'
+              },
+              context: {
+                data: null
               }
             },
             {
@@ -144,7 +157,7 @@ const createExampleRootGroup = () => ({
                       maxValue: Number.NaN
                     },
                     context: {
-                      history: { timestamps: [], values: {} }
+                      data: null
                     }
                   },
                   {
@@ -159,7 +172,7 @@ const createExampleRootGroup = () => ({
                       maxValue: Number.NaN
                     },
                     context: {
-                      history: { timestamps: [], values: {} }
+                      data: null
                     }
                   }
                 ]
@@ -228,7 +241,7 @@ const tabNames = computed(() => {
 const baselineMap = computed(() => {
   const baselineTab = waveformTabs.value.find(tab => tab.id === analysisStore.baselineTabId);
   if (!baselineTab) return {};
-  const map: Record<string, { history: History }> = {};
+  const map: Record<string, { data: AnalysisData }> = {};
 
   const walk = (node: any, path: string) => {
     if (node.type === 'group') {
@@ -238,7 +251,7 @@ const baselineMap = computed(() => {
     }
     if (node.type === 'analysis') {
       const signature = path ? `${path}/${node.core.name}` : node.core.name;
-      map[signature] = { history: node.context.history };
+      map[signature] = { data: node.context.data };
     }
   };
 

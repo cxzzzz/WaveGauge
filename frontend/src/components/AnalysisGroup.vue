@@ -115,7 +115,7 @@
             :ref="(el: any) => setChildRef(el, child.id)"
             v-model:core="child.core"
             :context="buildAnalysisContext(child)"
-            @update:context="(val) => updateChildContext(child.id, val.history)"
+            @update:context="(val) => updateChildContext(child.id, val.data)"
             @delete="deleteChild(index)"
           />
         </template>
@@ -157,14 +157,11 @@ type GroupCore = {
   children: any[];
 };
 
-type History = {
-  timestamps: Array<number>;
-  values: Record<string, number[]>;
-};
+type AnalysisData = unknown;
 
 type GroupContext = {
   groupPath: string;
-  baselineMap: Record<string, { history: History }>;
+  baselineMap: Record<string, { data: AnalysisData }>;
   tabId: string;
 };
 
@@ -202,7 +199,7 @@ const isEditingName = ref(false);
 const nameInput = ref<any>(null);
 const childRefs = ref(new Map<string, any>());
 const groupPathModel = computed(() => contextModel.value.groupPath);
-const EMPTY_HISTORY = { timestamps: [], values: {} };
+const EMPTY_DATA: AnalysisData = null;
 
 const buildAnalysisContext = (child: any) => {
   const signature = groupPathModel.value
@@ -210,19 +207,19 @@ const buildAnalysisContext = (child: any) => {
     : child.core.name;
   const baselineEntry = contextModel.value.baselineMap[signature];
   return {
-    history: child.context.history,
-    baselineHistory: baselineEntry ? baselineEntry.history : EMPTY_HISTORY,
+    data: child.context.data,
+    baselineData: baselineEntry ? baselineEntry.data : EMPTY_DATA,
     tabId: contextModel.value.tabId
   };
 };
-const updateChildContext = (childId: string, history: History) => {
+const updateChildContext = (childId: string, data: AnalysisData) => {
   const next = childrenModel.value.map((child: any) => {
     if (child.id !== childId) return child;
     return {
       ...child,
       context: {
         ...child.context,
-        history
+        data
       }
     };
   });
@@ -276,7 +273,7 @@ const addAnalysis = () => {
       maxValue: Number.NaN
     },
     context: {
-      history: { timestamps: [], values: {} }
+      data: null
     }
   });
   updateCore({ children: next });
@@ -441,9 +438,9 @@ const handleImport = (event: Event) => {
               maxValue
             };
             item.context = {
-              history: item.context && item.context.history
-                ? item.context.history
-                : (item.history ? item.history : { timestamps: [], values: {} })
+              data: item.context && item.context.data
+                ? item.context.data
+                : (item.data ? item.data : null)
             };
             delete item.name;
             delete item.transformCode;
@@ -451,7 +448,7 @@ const handleImport = (event: Event) => {
             delete item.chartType;
             delete item.summaryType;
             delete item.maxValue;
-            delete item.history;
+            delete item.data;
             delete item.state;
             return;
           }

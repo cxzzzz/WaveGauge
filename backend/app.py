@@ -98,6 +98,14 @@ def resolve_frontend_path(request_path: str) -> Path | None:
     return None
 
 
+def format_exception_detail(error: Exception) -> str:
+    message = str(error).strip()
+    error_type = type(error).__name__
+    if message:
+        return f"{error_type}: {message}"
+    return error_type
+
+
 @app.post("/api/analyze/instant", response_model=AnalyzeInstantResponse)
 async def analyze_instant(req: AnalyzeInstantRequest) -> AnalyzeInstantResponse:
     try:
@@ -108,7 +116,7 @@ async def analyze_instant(req: AnalyzeInstantRequest) -> AnalyzeInstantResponse:
 
     except Exception as e:
         logging.exception("Analyze instant request failed")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=format_exception_detail(e)) from e
 
 
 @app.post("/api/analyze/counter", response_model=AnalyzeCounterResponse)
@@ -122,7 +130,7 @@ async def analyze_counter(req: AnalyzeCounterRequest) -> AnalyzeCounterResponse:
 
     except Exception as e:
         logging.exception("Analyze counter request failed")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=format_exception_detail(e)) from e
 
 
 @app.post("/api/analyze/complete", response_model=AnalyzeCompleteResponse)
@@ -135,7 +143,7 @@ async def analyze_complete(req: AnalyzeCompleteRequest) -> AnalyzeCompleteRespon
 
     except Exception as e:
         logging.exception("Analyze complete request failed")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=format_exception_detail(e)) from e
 
 
 @app.get("/")

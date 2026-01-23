@@ -5,9 +5,9 @@ import { CounterStrategy } from './CounterStrategy';
 import { InstantStrategy } from './InstantStrategy';
 
 export class AnalysisStrategyRegistry {
-  private readonly strategies: Record<AnalysisType, AnalysisStrategy>;
+  private readonly strategies: Record<AnalysisType, AnalysisStrategy<unknown>>;
 
-  constructor(overrides?: Partial<Record<AnalysisType, AnalysisStrategy>>) {
+  constructor(overrides?: Partial<Record<AnalysisType, AnalysisStrategy<unknown>>>) {
     this.strategies = {
       counter: new CounterStrategy(),
       instant: new InstantStrategy(),
@@ -16,7 +16,7 @@ export class AnalysisStrategyRegistry {
     };
   }
 
-  getStrategy(type: AnalysisType): AnalysisStrategy {
+  getStrategy(type: AnalysisType): AnalysisStrategy<unknown> {
     return this.strategies[type];
   }
 }

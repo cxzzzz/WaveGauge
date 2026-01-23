@@ -3,24 +3,38 @@ import {
   AnalysisStrategy,
   type AnalysisRunResult,
   type ChartOptionParams,
-  type History,
-  type RunAnalysisParams
+  type DisplayMaxParams,
+  type RunAnalysisParams,
+  type SummaryParams
 } from './AnalysisStrategy';
 
-export class CompleteStrategy extends AnalysisStrategy {
+export type CompleteData = {
+  series: Record<string, { timestamps: number[]; values: Array<number | string>; durations: number[] }>;
+  is_multiseries: boolean;
+};
+
+export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
   readonly type = 'complete';
   readonly chartTypeOptions = [];
   readonly summaryTypeOptions = [];
 
-  async runAnalysis(_: RunAnalysisParams): Promise<AnalysisRunResult> {
-    return { history: { timestamps: [], values: {} }, isMultiseries: false };
+  getEmptyData(): CompleteData {
+    return { series: {}, is_multiseries: false };
   }
 
-  calculateSummary(_: History, __: string): Record<string, number> {
+  async runAnalysis(_: RunAnalysisParams): Promise<AnalysisRunResult<CompleteData>> {
+    return { data: this.getEmptyData(), isMultiseries: false };
+  }
+
+  calculateSummary(_: SummaryParams<CompleteData>): Record<string, number> {
     return {};
   }
 
-  buildChartOption(_: ChartOptionParams): echarts.EChartsOption {
+  getDisplayMaxValues(_: DisplayMaxParams<CompleteData>): Record<string, number> {
+    return {};
+  }
+
+  buildChartOption(_: ChartOptionParams<CompleteData>): echarts.EChartsOption {
     return { series: [] };
   }
 }

@@ -232,8 +232,7 @@ import { useAnalysisStore, type ZoomRange } from '../stores/analysis';
 import {
   analysisStrategyRegistryKey,
   type AnalysisStrategyRegistry,
-  type AnalysisType,
-  type History
+  type AnalysisType
 } from '../analysis/strategies';
 
 const API_URL = '/api';
@@ -250,8 +249,8 @@ type AnalysisCore = {
 };
 
 type AnalysisContext = {
-  history: History;
-  baselineHistory: History;
+  data: unknown;
+  baselineData: unknown;
   tabId: string;
 };
 
@@ -284,7 +283,9 @@ const chartTypeValue = computed(() => props.core.chartType);
 const summaryTypeValue = computed(() => props.core.summaryType);
 const maxValueValue = computed(() => props.core.maxValue);
 
-const historyData = computed(() => props.context.history);
+const dataModel = computed(() =>
+  props.context.data ?? analysisStrategy.value.getEmptyData()
+);
 const analysisStore = useAnalysisStore();
 const tabId = computed(() => props.context.tabId);
 const tabState = toRef(analysisStore.tabs, tabId.value);
@@ -297,9 +298,12 @@ const analysisStrategy = computed(() => strategyRegistry.getStrategy(analysisTyp
 const chartTypeOptions = computed(() => analysisStrategy.value.chartTypeOptions);
 const summaryTypeOptions = computed(() => analysisStrategy.value.summaryTypeOptions);
 
-const visibleHistory = computed(() => getVisibleHistory(historyData.value, zoomRange.value));
 const summaryValues = computed(() =>
-  analysisStrategy.value.calculateSummary(visibleHistory.value, summaryTypeValue.value)
+  analysisStrategy.value.calculateSummary({
+    data: dataModel.value,
+    summaryType: summaryTypeValue.value,
+    zoomRange: zoomRange.value
+  })
 );
 const wavePath = computed<string>(() => {
   return tabState.value.wavePath;
@@ -315,49 +319,27 @@ const isMultiValue = ref(false);
 
 const hasBaselineComparison = computed(() => {
   if (isBaseline.value) return false;
-  return baselineHistoryData.value.timestamps.length > 0;
+  return baselineData.value !== null && baselineData.value !== undefined;
 });
-const baselineHistoryData = computed(() => props.context.baselineHistory);
+const baselineData = computed(() => props.context.baselineData);
 const baselineZoomRange = ref<ZoomRange>({start: 0, end: Number.MIN_SAFE_INTEGER});
-const baselineVisibleHistory = computed(() => {
-  return getVisibleHistory(baselineHistoryData.value, baselineZoomRange.value);
-});
-const baselineSummaryValues = computed(() =>
-  analysisStrategy.value.calculateSummary(
-    baselineVisibleHistory.value,
-    summaryTypeValue.value
-  )
-);
-
-const getMaxFromHistory = (history: History, key: string) => {
-  let maxVal = 0;
-  history.values[key]!.forEach((item) => {
-    const value = Number(item);
-    if (Number.isFinite(value) && value > maxVal) {
-      maxVal = value;
-    }
+const baselineSummaryValues = computed(() => {
+  if (!hasBaselineComparison.value) return {};
+  return analysisStrategy.value.calculateSummary({
+    data: baselineData.value,
+    summaryType: summaryTypeValue.value,
+    zoomRange: baselineZoomRange.value
   });
-  return maxVal;
-};
-
-const getMaxForKey = (key: string) => {
-  if (Number.isFinite(props.core.maxValue)) return props.core.maxValue;
-  return getMaxFromHistory(visibleHistory.value, key);
-};
-
-const effectiveMax = computed(() => {
-  if (Number.isFinite(props.core.maxValue)) return props.core.maxValue;
-  const keys = Object.keys(visibleHistory.value.values);
-  if (keys.length !== 1) return 0;
-  const key = keys[0];
-  if (!key) return 0;
-  return getMaxFromHistory(visibleHistory.value, key);
 });
 
-const getMaxValueForDisplay = (key: string) => {
-  if (!isMultiValue.value) return Number(effectiveMax.value) || 0;
-  return Number(getMaxForKey(key)) || 0;
-};
+const displayMaxValues = computed(() =>
+  analysisStrategy.value.getDisplayMaxValues({
+    data: dataModel.value,
+    summaryValues: summaryValues.value,
+    userMaxValue: maxValueValue.value,
+    zoomRange: zoomRange.value
+  })
+);
 
 const getBaselineValueForKey = (key: string) => {
   if (!hasBaselineComparison.value) return Number.NaN;
@@ -382,7 +364,7 @@ const displayItems = computed<DisplayItem[]>(() => {
       label: key,
       currentValue,
       baselineValue,
-      maxValue: getMaxValueForDisplay(key),
+      maxValue: Number(displayMaxValues.value[key]),
       hasBaseline: hasBaselineComparison.value
     };
   });
@@ -405,8 +387,21 @@ const saveName = () => {
   }
 };
 
+const formatBackendError = (backendError: unknown) => {
+  if (typeof backendError === 'string') return backendError;
+  if (backendError instanceof Error) return backendError.message;
+  if (backendError && typeof backendError === 'object') {
+    try {
+      return JSON.stringify(backendError);
+    } catch {
+      return String(backendError);
+    }
+  }
+  return String(backendError);
+};
+
 const applyBackendError = (backendError: unknown, prefix: string) => {
-  const messageText = String(backendError);
+  const messageText = formatBackendError(backendError);
   errorMessage.value = messageText;
   message.error(`${prefix}: ${messageText}`);
 };
@@ -430,7 +425,7 @@ const runAnalysis = async () => {
     message.success(`Analysis for ${name.value} completed!`);
     errorMessage.value = '';
     isMultiValue.value = result.isMultiseries;
-    updateContext({ history: result.history });
+    updateContext({ data: result.data });
   } catch (error: any) {
     message.destroy();
     const backendError = error?.response?.data?.detail ?? error?.message ?? error;
@@ -477,28 +472,6 @@ const extensions = computed(() => {
   return isDark.value ? [python(), oneDark] : [python()];
 });
 
-const getVisibleHistory = (
-  history: History = historyData.value,
-  zoomRange: ZoomRange
-) => {
-  const length = history.timestamps.length;
-  if (!length) return { timestamps: [], values: {} };
-  const startIndex = Math.max(
-    0,
-    Math.min(length - 1, Math.floor((zoomRange.start / 100) * (length - 1)))
-  );
-  const endIndex = Math.max(
-    startIndex,
-    Math.min(length - 1, Math.ceil((zoomRange.end / 100) * (length - 1)))
-  );
-  const timestamps = history.timestamps.slice(startIndex, endIndex + 1);
-  const values: Record<string, number[]> = {};
-  Object.keys(history.values).forEach((key) => {
-    values[key] = history.values[key]!.slice(startIndex, endIndex + 1);
-  });
-  return { timestamps, values };
-};
-
 // Initialize Chart
 const baselineChartRef = ref<HTMLElement | null>(null);
 let baselineChartInstance: echarts.ECharts | null = null;
@@ -526,11 +499,11 @@ const disposeCharts = () => {
 
 const applyChartOption = (
   instance: echarts.ECharts,
-  history: History,
+  data: unknown,
   zoomRange: ZoomRange
 ) => {
   const option = analysisStrategy.value.buildChartOption({
-    history,
+    data,
     chartType: chartTypeValue.value,
     zoomRange,
     userMaxValue: maxValueValue.value,
@@ -558,9 +531,9 @@ const initCharts = () => {
 };
 
 const updateCharts = () => {
-  applyChartOption(chartInstance!, historyData.value, zoomRange.value);
-  if (hasBaselineComparison.value) {
-    applyChartOption(baselineChartInstance!, baselineHistoryData.value, baselineZoomRange.value);
+  applyChartOption(chartInstance!, dataModel.value, zoomRange.value);
+  if (hasBaselineComparison.value && baselineData.value !== null && baselineData.value !== undefined) {
+    applyChartOption(baselineChartInstance!, baselineData.value, baselineZoomRange.value);
   }
 };
 
@@ -611,19 +584,19 @@ watch([zoomRange, baselineZoomRange], () => {
 }, { deep: true });
 
 watch(
-  [historyData, chartTypeValue, maxValueValue],
-  ([newHistory, newType, newMax], [oldHistory, oldType, oldMax]) => {
-    const isHistoryChanged = newHistory !== oldHistory;
+  [dataModel, chartTypeValue, maxValueValue],
+  ([newData, newType, newMax], [oldData, oldType, oldMax]) => {
+    const isDataChanged = newData !== oldData;
     const isTypeChanged = newType !== oldType;
     const isMaxChanged = newMax !== oldMax && !(Number.isNaN(Number(newMax)) && Number.isNaN(Number(oldMax)));
 
-    if (isHistoryChanged || isTypeChanged || isMaxChanged) {
+    if (isDataChanged || isTypeChanged || isMaxChanged) {
       if (showTimeline.value) { updateCharts() } 
     }
   }
 );
 
-watch([baselineHistoryData, hasBaselineComparison], () => {
+watch([baselineData, hasBaselineComparison], () => {
   if (showTimeline.value) {
     disposeCharts();
     nextTick().then(() => {

@@ -4,16 +4,17 @@ import {
   AnalysisStrategy,
   type AnalysisRunResult,
   type ChartOptionParams,
-  type History,
-  type RunAnalysisParams
+  type DisplayMaxParams,
+  type RunAnalysisParams,
+  type SummaryParams
 } from './AnalysisStrategy';
 
-type CounterAnalysisPayload = {
+export type CounterData = {
   series: Record<string, { timestamps: number[]; values: number[] }>;
   is_multiseries: boolean;
 };
 
-export class CounterStrategy extends AnalysisStrategy {
+export class CounterStrategy extends AnalysisStrategy<CounterData> {
   readonly type = 'counter';
   readonly chartTypeOptions = [
     { label: 'Bar', value: 'bar' },
@@ -29,26 +30,42 @@ export class CounterStrategy extends AnalysisStrategy {
     { label: 'Sum', value: 'sum' }
   ];
 
-  private parseCounterHistory(payload: CounterAnalysisPayload): AnalysisRunResult {
-    const entries = Object.entries(payload.series);
+  getEmptyData(): CounterData {
+    return { series: {}, is_multiseries: false };
+  }
+
+  private getVisibleData(data: CounterData, zoomRange: { start: number; end: number }) {
+    const entries = Object.entries(data.series);
     if (!entries.length) {
-      return { history: { timestamps: [], values: {} }, isMultiseries: payload.is_multiseries };
+      return { timestamps: [], values: {} as Record<string, number[]> };
     }
     const firstEntry = entries[0];
     if (!firstEntry) {
-      return { history: { timestamps: [], values: {} }, isMultiseries: payload.is_multiseries };
+      return { timestamps: [], values: {} as Record<string, number[]> };
     }
-    const [firstKey, firstSeries] = firstEntry;
-    const timestamps = firstSeries?.timestamps ?? [];
+    const [, firstSeries] = firstEntry;
+    const timestamps = firstSeries.timestamps ?? [];
+    const length = timestamps.length;
+    if (!length) {
+      return { timestamps: [], values: {} as Record<string, number[]> };
+    }
+    const startIndex = Math.max(
+      0,
+      Math.min(length - 1, Math.floor((zoomRange.start / 100) * (length - 1)))
+    );
+    const endIndex = Math.max(
+      startIndex,
+      Math.min(length - 1, Math.ceil((zoomRange.end / 100) * (length - 1)))
+    );
+    const slicedTimestamps = timestamps.slice(startIndex, endIndex + 1);
     const values: Record<string, number[]> = {};
-    values[firstKey] = firstSeries.values ?? [];
-    entries.slice(1).forEach(([key, series]) => {
-      values[key] = series.values ?? [];
+    entries.forEach(([key, series]) => {
+      values[key] = (series.values ?? []).slice(startIndex, endIndex + 1);
     });
-    return { history: { timestamps, values }, isMultiseries: payload.is_multiseries };
+    return { timestamps: slicedTimestamps, values };
   }
 
-  async runAnalysis(params: RunAnalysisParams): Promise<AnalysisRunResult> {
+  async runAnalysis(params: RunAnalysisParams): Promise<AnalysisRunResult<CounterData>> {
     const response = await axios.post(`${params.apiUrl}/analyze/counter`, {
       file_path: params.wavePath,
       transform_code: params.transformCode,
@@ -59,11 +76,14 @@ export class CounterStrategy extends AnalysisStrategy {
       throw new Error(String(response.data.error ?? 'Unknown error'));
     }
 
-    return this.parseCounterHistory(response.data.data as CounterAnalysisPayload);
+    const payload = response.data.data as CounterData;
+    return { data: payload, isMultiseries: payload.is_multiseries };
   }
 
-  calculateSummary(history: History, summaryType: string): Record<string, number> {
-    const keys = Object.keys(history.values);
+  calculateSummary(params: SummaryParams<CounterData>): Record<string, number> {
+    const { data, summaryType, zoomRange } = params;
+    const visible = this.getVisibleData(data, zoomRange);
+    const keys = Object.keys(visible.values);
 
     const summarize = (values: number[]): number => {
       const numericValues = values.map(Number).filter(Number.isFinite);
@@ -75,34 +95,53 @@ export class CounterStrategy extends AnalysisStrategy {
       return total / numericValues.length;
     };
 
-    return Object.fromEntries(keys.map(key => [key, summarize(history.values[key]!)]));
+    return Object.fromEntries(keys.map(key => [key, summarize(visible.values[key] || [])]));
   }
 
-  buildChartOption(params: ChartOptionParams): echarts.EChartsOption {
-    const { history, chartType, zoomRange, userMaxValue, isDark } = params;
+  getDisplayMaxValues(params: DisplayMaxParams<CounterData>): Record<string, number> {
+    const { data, userMaxValue, zoomRange } = params;
+    const visible = this.getVisibleData(data, zoomRange);
+    const keys = Object.keys(visible.values);
+    if (Number.isFinite(userMaxValue)) {
+      return Object.fromEntries(keys.map(key => [key, Number(userMaxValue)]));
+    }
+    return Object.fromEntries(
+      keys.map((key) => {
+        const values = visible.values[key] ?? [];
+        let maxVal = 0;
+        values.forEach((item) => {
+          const value = Number(item);
+          if (Number.isFinite(value) && value > maxVal) {
+            maxVal = value;
+          }
+        });
+        return [key, maxVal];
+      })
+    );
+  }
+
+  buildChartOption(params: ChartOptionParams<CounterData>): echarts.EChartsOption {
+    const { data, chartType, zoomRange, userMaxValue, isDark } = params;
+    const visible = this.getVisibleData(data, zoomRange);
     const textColor = isDark ? '#a0a0a0' : '#666';
     const axisColor = isDark ? '#404040' : '#e0e0e0';
-    const steps = history.timestamps.map(item => String(item));
-    const keys = Object.keys(history.values);
+    const steps = visible.timestamps.map(item => String(item));
+    const keys = Object.keys(visible.values);
     const gridBottom = '20%';
 
-    const realZoomRange = {
-      start: zoomRange.start,
-      end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
-    };
     const dataZoom: echarts.DataZoomComponentOption[] = [
       {
         type: 'inside',
         xAxisIndex: 0,
-        start: realZoomRange.start,
-        end: realZoomRange.end
+        start: zoomRange.start,
+        end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
       }, {
         type: 'slider',
         xAxisIndex: 0,
         height: '10%',
         bottom: '2%',
-        start: realZoomRange.start,
-        end: realZoomRange.end
+        start: zoomRange.start,
+        end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
       }
     ];
 
@@ -147,7 +186,7 @@ export class CounterStrategy extends AnalysisStrategy {
       let maxValue = 0;
       yCategories.forEach((key, yIndex) => {
         steps.forEach((_, xIndex) => {
-          const rawValue = Number(history.values[key]![xIndex]);
+          const rawValue = Number(visible.values[key]![xIndex]);
           const value = Number.isFinite(rawValue) ? rawValue : 0;
           maxValue = Math.max(maxValue, value);
           heatmapData.push([xIndex, yIndex, value]);
@@ -186,11 +225,11 @@ export class CounterStrategy extends AnalysisStrategy {
       const isStacked = chartType === 'stacked_bar' || chartType === 'stacked_line';
       const seriesType = chartType.includes('bar') ? 'bar' : 'line';
       const series = keys.map(key => {
-        const data = steps.map((_, index) => history.values[key]![index]);
+        const dataPoints = steps.map((_, index) => Number(visible.values[key]![index]));
         if (seriesType === 'line') {
           const lineItem: echarts.LineSeriesOption = {
             name: key,
-            data,
+            data: dataPoints,
             type: 'line',
             smooth: true,
             showSymbol: false,
@@ -203,7 +242,7 @@ export class CounterStrategy extends AnalysisStrategy {
         }
         const barItem: echarts.BarSeriesOption = {
           name: key,
-          data,
+          data: dataPoints,
           type: 'bar'
         };
         if (isStacked) {

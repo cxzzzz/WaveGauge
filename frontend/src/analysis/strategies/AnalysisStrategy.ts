@@ -3,13 +3,8 @@ import type * as echarts from 'echarts';
 
 export type AnalysisType = 'counter' | 'instant' | 'complete';
 
-export type History = {
-  timestamps: number[];
-  values: Record<string, number[]>;
-};
-
-export type AnalysisRunResult = {
-  history: History;
+export type AnalysisRunResult<TData> = {
+  data: TData;
   isMultiseries: boolean;
 };
 
@@ -20,12 +15,25 @@ export type RunAnalysisParams = {
   sampleRate: number;
 };
 
-export type ChartOptionParams = {
-  history: History;
+export type ChartOptionParams<TData> = {
+  data: TData;
   chartType: string;
   zoomRange: ZoomRange;
   userMaxValue: number;
   isDark: boolean;
+};
+
+export type SummaryParams<TData> = {
+  data: TData;
+  summaryType: string;
+  zoomRange: ZoomRange;
+};
+
+export type DisplayMaxParams<TData> = {
+  data: TData;
+  summaryValues: Record<string, number>;
+  userMaxValue: number;
+  zoomRange: ZoomRange;
 };
 
 export type OptionItem = {
@@ -33,11 +41,13 @@ export type OptionItem = {
   value: string;
 };
 
-export abstract class AnalysisStrategy {
+export abstract class AnalysisStrategy<TData> {
   abstract readonly type: AnalysisType;
   abstract readonly chartTypeOptions: OptionItem[];
   abstract readonly summaryTypeOptions: OptionItem[];
-  abstract runAnalysis(params: RunAnalysisParams): Promise<AnalysisRunResult>;
-  abstract calculateSummary(history: History, summaryType: string): Record<string, number>;
-  abstract buildChartOption(params: ChartOptionParams): echarts.EChartsOption;
+  abstract getEmptyData(): TData;
+  abstract runAnalysis(params: RunAnalysisParams): Promise<AnalysisRunResult<TData>>;
+  abstract calculateSummary(params: SummaryParams<TData>): Record<string, number>;
+  abstract getDisplayMaxValues(params: DisplayMaxParams<TData>): Record<string, number>;
+  abstract buildChartOption(params: ChartOptionParams<TData>): echarts.EChartsOption;
 }
