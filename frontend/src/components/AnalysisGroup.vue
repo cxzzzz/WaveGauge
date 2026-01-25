@@ -34,23 +34,46 @@
         <edit-outlined v-if="!isEditingName" class="text-xs text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity ml-1" @click.stop="startEditing" />
       </div>
       
-      <div class="flex items-center gap-1.5" @click.stop>
+      <div class="flex items-center gap-0.5" @click.stop>
+        <a-tooltip title="Add Analysis">
+          <a-button 
+            type="text" 
+            size="small" 
+            class="inline-flex items-center justify-center !text-gray-500 hover:!text-blue-600 dark:!text-[#aaa] dark:hover:!text-blue-400 !h-5 !w-5 !px-0 !leading-none"
+            @click="addAnalysis"
+          >
+            <template #icon><line-chart-outlined /></template>
+          </a-button>
+        </a-tooltip>
+
+        <a-tooltip title="Add SubGroup">
+          <a-button 
+            type="text" 
+            size="small" 
+            class="inline-flex items-center justify-center !text-gray-500 hover:!text-blue-600 dark:!text-[#aaa] dark:hover:!text-blue-400 !h-5 !w-5 !px-0 !leading-none"
+            @click="addGroup"
+          >
+            <template #icon><folder-add-outlined /></template>
+          </a-button>
+        </a-tooltip>
+
+        <a-tooltip title="Run All Analyses">
+          <a-button 
+            type="text" 
+            size="small" 
+            class="inline-flex items-center justify-center !text-gray-500 hover:!text-green-600 dark:!text-[#aaa] dark:hover:!text-green-400 !h-5 !w-5 !px-0 !leading-none"
+            @click="runAllAnalyses"
+          >
+            <template #icon><play-circle-outlined /></template>
+          </a-button>
+        </a-tooltip>
+
         <a-dropdown trigger="click">
           <a-button type="text" size="small" class="inline-flex items-center justify-center !text-gray-500 hover:!text-gray-800 dark:!text-[#aaa] dark:hover:!text-white !h-5 !w-5 !px-0 !leading-none">
             <template #icon><more-outlined /></template>
           </a-button>
           <template #overlay>
             <a-menu>
-              <a-menu-item key="add-analysis" @click="addAnalysis">
-                <line-chart-outlined /> Add Analysis
-              </a-menu-item>
-              <a-menu-item key="add-group" @click="addGroup">
-                <folder-add-outlined /> Add SubGroup
-              </a-menu-item>
-              <a-menu-item key="run-all" @click="runAllAnalyses">
-                <play-circle-outlined /> Run Analyses
-              </a-menu-item>
-              <a-menu-divider />
               <a-menu-item key="export" @click="exportGroup">
                 <download-outlined /> Export Group
               </a-menu-item>
@@ -65,7 +88,7 @@
           </template>
         </a-dropdown>
         
-        <div class="text-gray-500 dark:text-[#aaa] text-[10px] ml-1" @click="toggleCollapse">
+        <div class="text-gray-500 dark:text-[#aaa] text-[10px] ml-1 w-4 flex justify-center" @click="toggleCollapse">
             <down-outlined v-if="!localCollapsed" />
             <right-outlined v-else />
         </div>
@@ -435,7 +458,8 @@ const handleImport = (event: Event) => {
               description,
               chartType: source.chartType,
               summaryType: source.summaryType,
-              maxValue
+              maxValue,
+              analysisType: source.analysisType
             };
             item.context = {
               data: item.context && item.context.data

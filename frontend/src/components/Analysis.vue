@@ -37,16 +37,18 @@
         <!-- Toggle Buttons -->
         <div class="flex gap-0.5" @click.stop>
           <!-- Timeline Toggle -->
-          <a-button 
-            type="text" 
-            size="small" 
-            class="inline-flex items-center justify-center !text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-5 !w-5 !px-0 !leading-none"
-            @click="showTimeline = !showTimeline"
-          >
-            <template #icon>
-              <bar-chart-outlined />
-            </template>
-          </a-button>
+          <a-tooltip title="Toggle Timeline">
+            <a-button 
+              type="text" 
+              size="small" 
+              class="inline-flex items-center justify-center !text-gray-500 hover:!text-[#1890ff] dark:!text-gray-400 dark:hover:!text-[#1890ff] !h-5 !w-5 !px-0 !leading-none"
+              @click="showTimeline = !showTimeline"
+            >
+              <template #icon>
+                <bar-chart-outlined />
+              </template>
+            </a-button>
+          </a-tooltip>
 
           <!-- Info/Description Toggle -->
           <a-popover trigger="click" placement="bottomRight">
@@ -73,6 +75,35 @@
             </a-button>
           </a-popover>
 
+          <!-- Run Analysis -->
+          <a-tooltip title="Run Analysis">
+            <a-button 
+              type="text" 
+              size="small" 
+              class="inline-flex items-center justify-center !text-gray-500 hover:!text-green-600 dark:!text-gray-400 dark:hover:!text-green-400 !h-5 !w-5 !px-0 !leading-none"
+              @click="runAnalysis"
+            >
+              <template #icon>
+                <play-circle-outlined />
+              </template>
+            </a-button>
+          </a-tooltip>
+
+          <!-- Show/Hide Settings -->
+          <a-tooltip :title="expanded ? 'Hide Settings' : 'Show Settings'">
+            <a-button 
+              type="text" 
+              size="small" 
+              class="inline-flex items-center justify-center !text-gray-500 hover:!text-blue-600 dark:!text-gray-400 dark:hover:!text-blue-400 !h-5 !w-5 !px-0 !leading-none"
+              @click="expanded = !expanded"
+            >
+              <template #icon>
+                <code-outlined v-if="!expanded" />
+                <up-outlined v-else />
+              </template>
+            </a-button>
+          </a-tooltip>
+
           <!-- Dropdown Menu -->
           <a-dropdown trigger="click" placement="bottomRight">
             <a-button 
@@ -84,15 +115,6 @@
             </a-button>
             <template #overlay>
               <a-menu>
-                <a-menu-item key="run" @click="runAnalysis">
-                  <play-circle-outlined /> Run Analysis
-                </a-menu-item>
-                <a-menu-item key="code" @click="expanded = !expanded">
-                  <code-outlined v-if="!expanded" />
-                  <up-outlined v-else />
-                  {{ expanded ? 'Hide Settings' : 'Show Settings' }}
-                </a-menu-item>
-                <a-menu-divider />
                 <a-menu-item key="delete" danger @click="$emit('delete')">
                   <delete-outlined /> Delete Analysis
                 </a-menu-item>
