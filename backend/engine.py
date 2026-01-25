@@ -202,9 +202,9 @@ class AnalysisEngine:
         data = self.execute_transform(transform_code)
         if isinstance(data, Waveform):
             data = {"": data}
-            is_multivalue = False
+            is_multiseries = False
         elif isinstance(data, dict):
-            is_multivalue = True
+            is_multiseries = True
         else:
             raise ValueError(f"Unexpected transform result type: {type(data)}")
 
@@ -221,7 +221,7 @@ class AnalysisEngine:
 
         return {
             "series": series,
-            "is_multiseries": is_multivalue,
+            "is_multiseries": is_multiseries,
         }
 
     def analyze_instant(self, transform_code: str) -> InstantAnalysisResult:
@@ -229,9 +229,9 @@ class AnalysisEngine:
         data = self.execute_transform(transform_code)
         if isinstance(data, Waveform):
             data = {"": data}
-            is_multivalue = False
+            is_multiseries = False
         elif isinstance(data, dict):
-            is_multivalue = True
+            is_multiseries = True
         else:
             raise ValueError(f"Unexpected transform result type: {type(data)}")
 
@@ -247,7 +247,7 @@ class AnalysisEngine:
 
         return InstantAnalysisResult(
             series=series,
-            is_multiseries=is_multivalue,
+            is_multiseries=is_multiseries,
         )
 
     def analyze_complete(self, transform_code: str) -> CompleteAnalysisResult:
@@ -255,9 +255,9 @@ class AnalysisEngine:
         data = self.execute_transform(transform_code)
         if isinstance(data, Waveform):
             data = {"": data}
-            is_multivalue = False
+            is_multiseries = False
         elif isinstance(data, dict):
-            is_multivalue = True
+            is_multiseries = True
         else:
             raise ValueError(f"Unexpected transform result type: {type(data)}")
 
@@ -275,5 +275,5 @@ class AnalysisEngine:
 
         return CompleteAnalysisResult(
             series=series,
-            is_multiseries=is_multivalue,
+            is_multiseries=is_multiseries,
         )

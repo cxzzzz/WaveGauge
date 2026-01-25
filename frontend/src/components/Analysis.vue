@@ -22,7 +22,7 @@
       </div>
       
       <div class="flex items-center gap-2">
-        <template v-if="!isMultiValue">
+        <template v-if="!isMultiseries">
           <template v-for="item in displayItems" :key="item.key">
             <ProgressValueDisplay
               :current-value="item.currentValue"
@@ -130,7 +130,7 @@
     </div>
 
     <!-- Multi-Value List -->
-    <div v-if="isMultiValue" class="px-1.5 py-0.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
+    <div v-if="isMultiseries" class="px-1.5 py-0.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
       <div v-for="item in displayItems" :key="item.key" class="flex justify-between items-center py-0.5">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ item.label }}</span>
         <div class="flex items-center gap-2">
@@ -284,6 +284,7 @@ type AnalysisCore = {
 
 type AnalysisContext = {
   data: unknown;
+  isMultiseries?: boolean;
   baselineData: unknown;
   tabId: string;
 };
@@ -362,7 +363,7 @@ const isBaseline = computed(() => {
   return analysisStore.baselineTabId === tabId.value;
 });
 
-const isMultiValue = ref(false);
+const isMultiseries = computed(() => !!props.context.isMultiseries);
 
 const hasBaselineComparison = computed(() => {
   if (isBaseline.value) return false;
@@ -471,8 +472,7 @@ const runAnalysis = async () => {
     message.destroy();
     message.success(`Analysis for ${name.value} completed!`);
     errorMessage.value = '';
-    isMultiValue.value = result.isMultiseries;
-    updateContext({ data: result.data });
+    updateContext({ data: result.data, isMultiseries: result.isMultiseries });
   } catch (error: any) {
     message.destroy();
     const backendError = error?.response?.data?.detail ?? error?.message ?? error;

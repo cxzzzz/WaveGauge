@@ -138,7 +138,7 @@
             :ref="(el: any) => setChildRef(el, child.id)"
             v-model:core="child.core"
             :context="buildAnalysisContext(child)"
-            @update:context="(val) => updateChildContext(child.id, val.data)"
+            @update:context="(val) => updateChildContext(child.id, val)"
             @delete="deleteChild(index)"
           />
         </template>
@@ -231,19 +231,21 @@ const buildAnalysisContext = (child: any) => {
   const baselineEntry = contextModel.value.baselineMap[signature];
   return {
     data: child.context.data,
+    isMultiseries: child.context.isMultiseries,
     baselineData: baselineEntry ? baselineEntry.data : EMPTY_DATA,
     tabId: contextModel.value.tabId
   };
 };
-const updateChildContext = (childId: string, data: AnalysisData) => {
+const updateChildContext = (childId: string, newContext: any) => {
   const next = childrenModel.value.map((child: any) => {
     if (child.id !== childId) return child;
     return {
       ...child,
       context: {
-        ...child.context,
-        data
-      }
+          ...child.context,
+          data: newContext.data,
+          isMultiseries: newContext.isMultiseries
+        }
     };
   });
   updateCore({ children: next });
@@ -464,7 +466,8 @@ const handleImport = (event: Event) => {
             item.context = {
               data: item.context && item.context.data
                 ? item.context.data
-                : (item.data ? item.data : null)
+                : (item.data ? item.data : null),
+              isMultiseries: item.context && (item.context.isMultiseries ?? item.context.isMultiValue)
             };
             delete item.name;
             delete item.transformCode;
