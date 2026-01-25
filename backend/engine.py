@@ -153,12 +153,12 @@ class CompleteAnalysisResult(TypedDict):
 class AnalysisEngine:
     # 为 W 和 MW 加上显式装饰
     @log_exceptions
-    def load_wave(self, path: str, clock: str | None = None) -> Any:
-        return self.reader.load_wave(path, clock=clock)
+    def load_waveform(self, path: str, clock: str | None = None, **kwargs: Any) -> Any:
+        return self.reader.load_waveform(path, clock=clock, **kwargs)
 
     @log_exceptions
-    def load_matched_waves(self, pattern: Any, clock: str | None = None, **kwargs: Any) -> Any:
-        return self.reader.load_waves(pattern, clock=clock, **kwargs)
+    def load_matched_waveforms(self, pattern: Any, clock: str | None = None, **kwargs: Any) -> Any:
+        return self.reader.load_matched_waveforms(pattern, clock=clock, **kwargs)
 
     def execute_transform(self, code: str) -> Any:
         aeval = Interpreter(
@@ -166,8 +166,8 @@ class AnalysisEngine:
                 # 使用 LoggedModule 全局代理 np 和 pd
                 "pd": LoggedModule(pd),
                 "np": LoggedModule(np),
-                "W": self.load_wave,
-                "MW": self.load_matched_waves,
+                "W": self.load_waveform,
+                "MW": self.load_matched_waveforms,
             }
         )
         result = aeval(code)
@@ -213,16 +213,16 @@ class AnalysisEngine:
             assert isinstance(value, Waveform), (
                 f"Unexpected value type for key {key}: {type(value)}"
             )
-            sampled_wave = value.sample(sample_rate, func=np.mean)
+            sampled_wave = value.downsample(sample_rate, func=np.mean)
             series[key] = {
                 "timestamps": sampled_wave.time.tolist(),
                 "values": sampled_wave.value.tolist(),
             }
 
-        return {
-            "series": series,
-            "is_multiseries": is_multiseries,
-        }
+        return CounterAnalysisResult(
+            series=series,
+            is_multiseries=is_multiseries,
+        )
 
     def analyze_instant(self, transform_code: str) -> InstantAnalysisResult:
         # InstantTransformResult = Waveform | dict[str, Waveform]
