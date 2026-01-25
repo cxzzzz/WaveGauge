@@ -508,7 +508,15 @@ const handleImport = (event: Event) => {
         };
         
         processImportedItem(importedData);
-        updateCore({ children: [...childrenModel.value, importedData] });
+
+        if (importedData.type === 'group' && importedData.core.name === '') {
+          // If importing a root group (empty name), flatten it by adding its children directly
+          const childrenToAdd = importedData.core.children || [];
+          updateCore({ children: [...childrenModel.value, ...childrenToAdd] });
+        } else {
+          updateCore({ children: [...childrenModel.value, importedData] });
+        }
+        
         message.success('Import successful');
         
         if (localCollapsed.value) toggleCollapse();
