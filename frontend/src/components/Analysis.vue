@@ -347,7 +347,7 @@ const hasBaselineComparison = computed(() => {
   return baselineData.value !== null && baselineData.value !== undefined;
 });
 const baselineData = computed(() => props.context.baselineData);
-const baselineZoomRange = ref<ZoomRange>({start: 0, end: Number.MIN_SAFE_INTEGER});
+const baselineZoomRange = ref<ZoomRange>({ start: 0, end: 100 });
 const baselineSummaryValues = computed(() => {
   if (!hasBaselineComparison.value) return {};
   return analysisStrategy.value.calculateSummary({
@@ -541,6 +541,27 @@ const applyChartOption = (
   }, 0);
 };
 
+const applyZoomAction = (instance: echarts.ECharts, zoomRange: ZoomRange) => {
+  const start = zoomRange.start;
+  const end = zoomRange.end;
+  isSettingZoom.value = true;
+  instance.dispatchAction({
+    type: 'dataZoom',
+    dataZoomIndex: 0,
+    start,
+    end
+  });
+  instance.dispatchAction({
+    type: 'dataZoom',
+    dataZoomIndex: 1,
+    start,
+    end
+  });
+  setTimeout(() => {
+    isSettingZoom.value = false;
+  }, 0);
+};
+
 const initCharts = () => {
   chartInstance = createChartInstance(chartRef.value!, zoomRange);
   if (hasBaselineComparison.value) {
@@ -627,7 +648,13 @@ watch(showTimeline, async (val) => {
 });
 
 watch([zoomRange, baselineZoomRange], () => {
-  if (showTimeline.value) { updateCharts() }
+  if (!showTimeline.value) return;
+  if (chartInstance) {
+    applyZoomAction(chartInstance, zoomRange.value);
+  }
+  if (hasBaselineComparison.value && baselineChartInstance) {
+    applyZoomAction(baselineChartInstance, baselineZoomRange.value);
+  }
 }, { deep: true });
 
 watch(

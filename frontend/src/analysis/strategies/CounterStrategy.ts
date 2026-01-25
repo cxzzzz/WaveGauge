@@ -134,14 +134,14 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
         type: 'inside',
         xAxisIndex: 0,
         start: zoomRange.start,
-        end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
+        end: zoomRange.end
       }, {
         type: 'slider',
         xAxisIndex: 0,
         height: '10%',
         bottom: '2%',
         start: zoomRange.start,
-        end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
+        end: zoomRange.end
       }
     ];
 

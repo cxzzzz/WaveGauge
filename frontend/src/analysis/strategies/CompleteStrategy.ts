@@ -134,20 +134,19 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
     const chartData: any[] = [];
     const categories = seriesKeys;
     const { min, max } = this.getTimeBounds(data);
-    const zoomEnd = zoomRange.end === Number.MAX_SAFE_INTEGER ? 100 : zoomRange.end;
     const dataZoom: echarts.DataZoomComponentOption[] = [
       {
         type: 'inside',
         xAxisIndex: 0,
         start: zoomRange.start,
-        end: zoomEnd
+        end: zoomRange.end
       }, {
         type: 'slider',
         xAxisIndex: 0,
         height: '10%',
         bottom: '2%',
         start: zoomRange.start,
-        end: zoomEnd
+        end: zoomRange.end
       }
     ];
     
