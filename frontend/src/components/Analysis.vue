@@ -292,6 +292,7 @@ type AnalysisContext = {
 const props = defineProps<{
   core: AnalysisCore;
   context: AnalysisContext;
+  ancestorCollapsed?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -346,13 +347,16 @@ const handleAnalysisTypeChange = (value: AnalysisType) => {
   });
 };
 
-const summaryValues = computed(() =>
-  analysisStrategy.value.calculateSummary({
+const summaryValues = computed(() => {
+  if (props.ancestorCollapsed) {
+    return {};
+  }
+  return analysisStrategy.value.calculateSummary({
     data: dataModel.value,
     summaryType: summaryTypeValue.value,
     zoomRange: zoomRange.value
-  })
-);
+  });
+});
 const wavePath = computed<string>(() => {
   return tabState.value.wavePath;
 });
@@ -372,6 +376,7 @@ const hasBaselineComparison = computed(() => {
 const baselineData = computed(() => props.context.baselineData);
 const baselineZoomRange = ref<ZoomRange>({ start: 0, end: 100 });
 const baselineSummaryValues = computed(() => {
+  if (props.ancestorCollapsed) return {};
   if (!hasBaselineComparison.value) return {};
   return analysisStrategy.value.calculateSummary({
     data: baselineData.value,
@@ -380,14 +385,15 @@ const baselineSummaryValues = computed(() => {
   });
 });
 
-const displayMaxValues = computed(() =>
-  analysisStrategy.value.getDisplayMaxValues({
+const displayMaxValues = computed(() => {
+  if (props.ancestorCollapsed) return {};
+  return analysisStrategy.value.getDisplayMaxValues({
     data: dataModel.value,
     summaryValues: summaryValues.value,
     userMaxValue: maxValueValue.value,
     zoomRange: zoomRange.value
-  })
-);
+  });
+});
 
 const getBaselineValueForKey = (key: string) => {
   if (!hasBaselineComparison.value) return Number.NaN;
@@ -597,6 +603,7 @@ const initCharts = () => {
 };
 
 const updateCharts = () => {
+  if (props.ancestorCollapsed) return;
   applyChartOption(chartInstance!, dataModel.value, zoomRange.value);
   if (hasBaselineComparison.value && baselineData.value !== null && baselineData.value !== undefined) {
     applyChartOption(baselineChartInstance!, baselineData.value, baselineZoomRange.value);
@@ -636,6 +643,15 @@ const updateZoomFromEvent = (
   zoomRangeRef.value.end = Math.max(0, Math.min(100, nextEnd));
 };
 
+watch(() => props.ancestorCollapsed, (collapsed) => {
+  if (!collapsed && showTimeline.value) {
+    nextTick(() => {
+      handleResize();
+      updateCharts();
+    });
+  }
+});
+
 // Watch theme changes
 let observer: MutationObserver | null = null;
 
@@ -670,6 +686,7 @@ watch(showTimeline, async (val) => {
 });
 
 watch([zoomRange, baselineZoomRange], () => {
+  if (props.ancestorCollapsed) return;
   if (!showTimeline.value) return;
   if (chartInstance) {
     applyZoomAction(chartInstance, zoomRange.value);

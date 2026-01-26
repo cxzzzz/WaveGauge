@@ -130,6 +130,7 @@
               tabId: contextModel.tabId
             }"
             :is-root="false"
+            :ancestor-collapsed="effectiveCollapsed"
             :ref="(el: any) => setChildRef(el, child.id)"
             @delete="deleteChild(index)"
           />
@@ -138,6 +139,7 @@
             :ref="(el: any) => setChildRef(el, child.id)"
             v-model:core="child.core"
             :context="buildAnalysisContext(child)"
+            :ancestor-collapsed="effectiveCollapsed"
             @update:context="(val) => updateChildContext(child.id, val)"
             @delete="deleteChild(index)"
           />
@@ -193,6 +195,7 @@ const props = defineProps<{
   core: GroupCore;
   context: GroupContext;
   isRoot: boolean;
+  ancestorCollapsed?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -215,6 +218,7 @@ const childrenModel = computed({
 });
 
 const localCollapsed = ref(coreModel.value.collapsed);
+const effectiveCollapsed = computed(() => props.ancestorCollapsed || localCollapsed.value);
 const groupName = computed(() => coreModel.value.name);
 const localName = ref(groupName.value);
 const fileInput = ref<HTMLInputElement | null>(null);
