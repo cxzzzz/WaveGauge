@@ -115,6 +115,9 @@
             </a-button>
             <template #overlay>
               <a-menu>
+                <a-menu-item key="duplicate" @click="$emit('duplicate')">
+                  <copy-outlined /> Duplicate Analysis
+                </a-menu-item>
                 <a-menu-item key="delete" danger @click="$emit('delete')">
                   <delete-outlined /> Delete Analysis
                 </a-menu-item>
@@ -254,7 +257,8 @@ import {
   EditOutlined,
   DeleteOutlined,
   InfoCircleOutlined,
-  MoreOutlined
+  MoreOutlined,
+  CopyOutlined
 } from '@ant-design/icons-vue';
 import * as echarts from 'echarts';
 import { Codemirror } from 'vue-codemirror';
@@ -299,6 +303,7 @@ const emit = defineEmits<{
   (e: 'update:core', val: AnalysisCore): void;
   (e: 'update:context', val: AnalysisContext): void;
   (e: 'delete'): void;
+  (e: 'duplicate'): void;
 }>();
 
 const updateCore = (patch: Partial<AnalysisCore>) => {

@@ -81,6 +81,9 @@
                 <upload-outlined /> Import Group
               </a-menu-item>
               <a-menu-divider v-if="!isRoot" />
+              <a-menu-item v-if="!isRoot" key="duplicate" @click="$emit('duplicate')">
+                <copy-outlined /> Duplicate Group
+              </a-menu-item>
               <a-menu-item v-if="!isRoot" key="delete" danger @click="$emit('delete')">
                 <delete-outlined /> Delete Group
               </a-menu-item>
@@ -133,6 +136,7 @@
             :ancestor-collapsed="effectiveCollapsed"
             :ref="(el: any) => setChildRef(el, child.id)"
             @delete="deleteChild(index)"
+            @duplicate="duplicateChild(index)"
           />
           <Analysis
             v-else
@@ -142,6 +146,7 @@
             :ancestor-collapsed="effectiveCollapsed"
             @update:context="(val) => updateChildContext(child.id, val)"
             @delete="deleteChild(index)"
+            @duplicate="duplicateChild(index)"
           />
         </template>
       </draggable>
@@ -164,7 +169,8 @@ import {
   UploadOutlined, 
   DeleteOutlined,
   EditOutlined,
-  PlayCircleOutlined
+  PlayCircleOutlined,
+  CopyOutlined
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import draggable from 'vuedraggable';
@@ -200,6 +206,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'delete'): void;
+  (e: 'duplicate'): void;
   (e: 'update:core', val: GroupCore): void;
 }>();
 
@@ -285,6 +292,37 @@ watch(() => coreModel.value.collapsed, (val) => {
 const deleteChild = (index: number) => {
   const next = [...childrenModel.value];
   next.splice(index, 1);
+  updateCore({ children: next });
+};
+
+const cloneNode = (node: any): any => {
+  const newNode = JSON.parse(JSON.stringify(node));
+  newNode.id = uuidv4();
+  
+  if (newNode.core && typeof newNode.core.name === 'string') {
+    newNode.core.name = `${newNode.core.name} (Copy)`;
+  }
+  
+  if (newNode.type === 'group' && newNode.core && Array.isArray(newNode.core.children)) {
+    const regenerateIds = (children: any[]) => {
+      for (const child of children) {
+        child.id = uuidv4();
+        if (child.type === 'group' && child.core && Array.isArray(child.core.children)) {
+          regenerateIds(child.core.children);
+        }
+      }
+    };
+    regenerateIds(newNode.core.children);
+  }
+  
+  return newNode;
+};
+
+const duplicateChild = (index: number) => {
+  const child = childrenModel.value[index];
+  const newChild = cloneNode(child);
+  const next = [...childrenModel.value];
+  next.splice(index + 1, 0, newChild);
   updateCore({ children: next });
 };
 
