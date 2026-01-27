@@ -30,10 +30,21 @@ def build_backend():
     
     run_command(f'{sys.executable} -m PyInstaller build.spec --clean --noconfirm')
 
+def get_version():
+    try:
+        with open(os.path.join('backend', 'pyproject.toml'), 'r') as f:
+            for line in f:
+                if line.strip().startswith('version ='):
+                    return line.split('=')[1].strip().strip('"').strip("'")
+    except Exception:
+        return "0.0.0"
+    return "0.0.0"
+
 def zip_artifact():
     print("--- Zipping Artifact ---")
     dist_dir = os.path.join(os.getcwd(), 'dist', 'WaveGauge')
-    output_filename = f"WaveGauge-{platform.system()}-{platform.machine()}"
+    version = get_version()
+    output_filename = f"WaveGauge-{version}-{platform.system()}-{platform.machine()}"
     
     shutil.make_archive(output_filename, 'zip', root_dir='dist', base_dir='WaveGauge')
     print(f"Created {output_filename}.zip")

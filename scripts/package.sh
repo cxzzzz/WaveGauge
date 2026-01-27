@@ -1,68 +1,41 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
-BUILD_DIR="$ROOT_DIR/build_pkg"
+# Get version from pyproject.toml
+VERSION=$(grep -m 1 'version =' backend/pyproject.toml | cut -d '"' -f 2)
+echo "--- Packaging Source (Version: $VERSION) ---"
 
-# Determine version: prefer env var, then git tag, fallback to 'latest'
-VERSION=${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "latest")}
-DIST_NAME="WaveGauge-${VERSION}"
-OUTPUT_DIR="$ROOT_DIR/dist"
+OUTPUT_NAME="WaveGauge-Source-${VERSION}"
+DIST_DIR="dist"
 
-echo "=== Starting Package Process ==="
+mkdir -p $DIST_DIR
+rm -rf $DIST_DIR/$OUTPUT_NAME
+mkdir -p $DIST_DIR/$OUTPUT_NAME
 
-# 1. Build Frontend
-echo ">>> Building Frontend..."
-"$ROOT_DIR/scripts/build.sh"
+# Copy Backend
+echo "Copying backend..."
+cp -r backend $DIST_DIR/$OUTPUT_NAME/
 
-# 2. Prepare Directories
-echo ">>> Preparing Release Directory..."
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR/$DIST_NAME"
-mkdir -p "$OUTPUT_DIR"
+# Copy Frontend build artifacts
+echo "Copying frontend..."
+mkdir -p $DIST_DIR/$OUTPUT_NAME/frontend
+cp -r frontend/dist $DIST_DIR/$OUTPUT_NAME/frontend/
+cp frontend/package.json $DIST_DIR/$OUTPUT_NAME/frontend/
 
-# 3. Copy Backend
-echo ">>> Copying Backend..."
-cp -r "$ROOT_DIR/backend" "$BUILD_DIR/$DIST_NAME/"
+# Copy root files
+cp README.md $DIST_DIR/$OUTPUT_NAME/ 2>/dev/null || true
+cp LICENSE $DIST_DIR/$OUTPUT_NAME/ 2>/dev/null || true
 
-# 4. Copy Frontend Dist
-echo ">>> Copying Frontend Assets..."
-mkdir -p "$BUILD_DIR/$DIST_NAME/frontend/dist"
-# Ensure frontend/dist exists
-if [ -d "$ROOT_DIR/frontend/dist" ]; then
-    cp -r "$ROOT_DIR/frontend/dist/"* "$BUILD_DIR/$DIST_NAME/frontend/dist/"
-else
-    echo "Error: frontend/dist not found. Build failed?"
-    exit 1
-fi
+# Clean up
+echo "Cleaning up..."
+find $DIST_DIR/$OUTPUT_NAME -name "__pycache__" -type d -exec rm -rf {} +
+find $DIST_DIR/$OUTPUT_NAME -name ".venv" -type d -exec rm -rf {} +
+find $DIST_DIR/$OUTPUT_NAME -name ".pytest_cache" -type d -exec rm -rf {} +
 
-# 5. Copy Scripts and Configs
-echo ">>> Copying Scripts and Configs..."
-cp "$ROOT_DIR/Makefile" "$BUILD_DIR/$DIST_NAME/"
-mkdir -p "$BUILD_DIR/$DIST_NAME/scripts"
-cp "$ROOT_DIR/scripts/run.sh" "$BUILD_DIR/$DIST_NAME/scripts/"
-cp "$ROOT_DIR/scripts/build.sh" "$BUILD_DIR/$DIST_NAME/scripts/"
+# Zip
+echo "Zipping..."
+cd $DIST_DIR
+zip -r "${OUTPUT_NAME}.zip" "$OUTPUT_NAME"
+cd ..
 
-# 6. Copy Data (e.g. samples)
-echo ">>> Copying Data..."
-if [ -d "$ROOT_DIR/data" ]; then
-    cp -r "$ROOT_DIR/data" "$BUILD_DIR/$DIST_NAME/"
-fi
-
-# 7. Cleanup Development Files
-echo ">>> Cleaning up..."
-find "$BUILD_DIR/$DIST_NAME" -name "__pycache__" -type d -exec rm -rf {} +
-find "$BUILD_DIR/$DIST_NAME" -name ".venv" -type d -exec rm -rf {} +
-find "$BUILD_DIR/$DIST_NAME" -name ".pytest_cache" -type d -exec rm -rf {} +
-find "$BUILD_DIR/$DIST_NAME" -name "*.pyc" -delete
-
-# 8. Create Archive
-echo ">>> Creating Archive..."
-cd "$BUILD_DIR"
-tar -czf "$OUTPUT_DIR/$DIST_NAME.tar.gz" "$DIST_NAME"
-echo "Package created at: $OUTPUT_DIR/$DIST_NAME.tar.gz"
-
-# 9. Cleanup Build Dir
-rm -rf "$BUILD_DIR"
-
-echo "=== Package Complete ==="
+echo "Package created at ${DIST_DIR}/${OUTPUT_NAME}.zip"

@@ -57,6 +57,13 @@ jobs:
     - name: Build Application
       run: python scripts/build.py
 
+    - name: Create Source Package (Linux Only)
+      if: runner.os == 'Linux'
+      run: |
+        chmod +x scripts/build.sh scripts/package.sh
+        ./scripts/build.sh
+        ./scripts/package.sh
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
