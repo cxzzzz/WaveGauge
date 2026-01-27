@@ -168,6 +168,7 @@ class AnalysisEngine:
                 "np": LoggedModule(np),
                 "W": self.load_waveform,
                 "MW": self.load_matched_waveforms,
+                "R": self.reader,
             }
         )
         result = aeval(code)
