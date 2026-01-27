@@ -9,12 +9,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from .engine import (
-    AnalysisEngine,
-    CompleteAnalysisResult,
-    CounterAnalysisResult,
-    InstantAnalysisResult,
-)
+try:
+    from .engine import (
+        AnalysisEngine,
+        CompleteAnalysisResult,
+        CounterAnalysisResult,
+        InstantAnalysisResult,
+    )
+except ImportError:
+    from engine import (
+        AnalysisEngine,
+        CompleteAnalysisResult,
+        CounterAnalysisResult,
+        InstantAnalysisResult,
+    )
 
 app = FastAPI()
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"

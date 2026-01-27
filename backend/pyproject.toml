@@ -16,12 +16,15 @@ dependencies = [
     "python-multipart",
     "websockets",
     "wavekit>=0.2",
+    "pywebview",
+    "PyGObject; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
 dev = [
     "mypy>=1.8",
     "ruff>=0.6",
+    "pyinstaller",
 ]
 
 [tool.setuptools]
