@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wavegauge-backend"
-version = "0.2.1"
+version = "0.2.2"
 description = "Backend service for WaveGauge"
 requires-python = ">=3.9"
 dependencies = [
