@@ -1,23 +1,44 @@
 SHELL := /bin/bash
 
+# Configuration
+PYTHON_BIN ?= python3
+VENV_DIR ?= backend/.venv
 HOST ?= 0.0.0.0
 PORT ?= 8000
-WORKERS ?= 2
-APP_MODULE ?= backend.app:app
-PYTHON_BIN ?= python3
-ROOT_DIR ?= $(CURDIR)
-VENV_DIR ?= $(ROOT_DIR)/backend/.venv
-FRONTEND_DIR ?= $(ROOT_DIR)/frontend
-NODE_ENV ?= production
-PIP_INDEX_URL ?=
 
-.PHONY: build run package
+.PHONY: help install dev-server dev-desktop build-exe build-source clean
 
-build:
-	PYTHON_BIN=$(PYTHON_BIN) VENV_DIR=$(VENV_DIR) PIP_INDEX_URL=$(PIP_INDEX_URL) NODE_ENV=$(NODE_ENV) FRONTEND_DIR=$(FRONTEND_DIR) $(ROOT_DIR)/scripts/build.sh
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-package:
-	$(ROOT_DIR)/scripts/package.sh
+install: ## Install dependencies (frontend & backend)
+	@echo "--- Installing Backend Dependencies ---"
+	cd backend && $(PYTHON_BIN) -m pip install -e .[dev]
+	@echo "--- Installing Frontend Dependencies ---"
+	cd frontend && npm install
 
-run:
-	HOST=$(HOST) PORT=$(PORT) WORKERS=$(WORKERS) APP_MODULE=$(APP_MODULE) VENV_DIR=$(VENV_DIR) $(ROOT_DIR)/scripts/run.sh
+dev-server: ## Run development server (backend only)
+	@echo "--- Starting Development Server ---"
+	HOST=$(HOST) PORT=$(PORT) ./scripts/run.sh
+
+dev-desktop: ## Run development desktop app
+	@echo "--- Starting Development Desktop App ---"
+	./scripts/run.sh desktop
+
+build-exe: ## Build executable (desktop app)
+	@echo "--- Building Executable ---"
+	$(PYTHON_BIN) scripts/build.py --type exe
+
+build-source: ## Build source package
+	@echo "--- Building Source Package ---"
+	$(PYTHON_BIN) scripts/build.py --type source
+
+clean: ## Clean build artifacts
+	@echo "--- Cleaning ---"
+	rm -rf dist build
+	rm -rf backend/__pycache__ backend/*.pyc
+	rm -rf backend/build backend/dist backend/*.egg-info
+	rm -rf frontend/dist
