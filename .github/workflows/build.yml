@@ -54,18 +54,29 @@ jobs:
         # Explicitly install pyinstaller if not in dev dependencies (though we added it)
         pip install pyinstaller
 
-    - name: Create Source Package
+    - name: Create Source Package (Linux Only)
       if: runner.os == 'Linux'
-      run: python scripts/build.py --type source
+      run: |
+        python scripts/build.py --type source
+        ls -R dist
 
     - name: Build Application
       run: python scripts/build.py --type exe
 
-    - name: Upload Artifact
+    - name: Upload Artifact (App)
       uses: actions/upload-artifact@v4
       with:
         name: WaveGauge-${{ runner.os }}
         path: dist/WaveGauge-*.zip
+        if-no-files-found: error
+
+    - name: Upload Artifact (Source)
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: WaveGauge-Source
+        path: dist/WaveGauge-Source-*.zip
+        if-no-files-found: error
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
