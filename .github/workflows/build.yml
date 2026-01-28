@@ -54,12 +54,12 @@ jobs:
         # Explicitly install pyinstaller if not in dev dependencies (though we added it)
         pip install pyinstaller
 
-    - name: Build Application
-      run: python scripts/build.py --type exe
-
-    - name: Create Source Package (Linux Only)
+    - name: Create Source Package
       if: runner.os == 'Linux'
       run: python scripts/build.py --type source
+
+    - name: Build Application
+      run: python scripts/build.py --type exe
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
