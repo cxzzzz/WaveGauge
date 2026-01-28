@@ -14,9 +14,6 @@ WaveGauge replaces manual waveform inspection with "Code-as-Metric" flexibility,
   - **Complete Timeline**: Gantt-like views for state machine transitions, transaction lifecycles, and task durations.
 - **Baseline Comparison**: Easily compare current simulation runs against a baseline to identify regressions or performance improvements.
 - **Group Management**: Drag-and-drop interface to organize analysis items into hierarchical groups for better project structure.
-- **Cross-Platform Support**:
-  - **Server Mode**: Run as a web server for remote access and team collaboration.
-  - **Desktop Mode**: Run as a standalone desktop application (Windows/Linux) using PyWebView.
 
 ## Tech Stack
 
