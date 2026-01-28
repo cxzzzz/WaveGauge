@@ -6,10 +6,14 @@ import os
 
 try:
     import uvicorn
-    import webview
+    # Optional GUI dependency
+    try:
+        import webview
+    except ImportError:
+        webview = None
 except ImportError as e:
     print(f"Error importing required packages: {e}")
-    print("Please install dependencies: pip install -e .[dev] or pip install pywebview uvicorn")
+    print("Please install dependencies: pip install -e .[dev] or pip install uvicorn")
     sys.exit(1)
 
 try:
