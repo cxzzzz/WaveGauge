@@ -133,8 +133,8 @@
     </div>
 
     <!-- Multi-Value List -->
-    <div v-if="isMultiseries" class="px-1.5 py-0.5 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
-      <div v-for="item in displayItems" :key="item.key" class="flex justify-between items-center py-0.5">
+    <div v-if="isMultiseries" class="px-1.5 py-0 bg-white dark:bg-[#1f1f1f] border-t border-gray-100 dark:border-[#2a2a2a]">
+      <div v-for="item in displayItems" :key="item.key" class="flex justify-between items-center py-[1px]">
         <span class="text-xs text-gray-600 dark:text-[#a0a0a0]">{{ item.label }}</span>
         <div class="flex items-center gap-2">
           <ProgressValueDisplay
