@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-20.04, windows-latest]
 
     steps:
     - uses: actions/checkout@v4
@@ -63,19 +63,11 @@ jobs:
     - name: Build Application
       run: python scripts/build.py --type exe
 
-    - name: Upload Artifact (App)
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: WaveGauge-${{ runner.os }}
         path: dist/WaveGauge-*.zip
-        if-no-files-found: error
-
-    - name: Upload Artifact (Source)
-      if: runner.os == 'Linux'
-      uses: actions/upload-artifact@v4
-      with:
-        name: WaveGauge-Source
-        path: dist/WaveGauge-Source-*.zip
         if-no-files-found: error
 
     - name: Create Release
