@@ -86,7 +86,7 @@ def package_source():
             
     # Zip
     print("Zipping Source Package...")
-    shutil.make_archive(os.path.join(dist_dir, output_name), 'zip', root_dir=dist_dir, base_dir=output_name)
+    shutil.make_archive(output_name, 'zip', root_dir=dist_dir, base_dir=output_name)
     print(f"Created {output_name}.zip")
 
 def main():
