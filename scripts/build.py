@@ -50,8 +50,8 @@ def zip_artifact():
     # shutil.make_archive defaults to zip
     # root_dir is the directory that will be the root of the archive
     # base_dir is the directory inside root_dir that we want to archive
-    shutil.make_archive(output_filename, 'zip', root_dir='dist', base_dir='WaveGauge')
-    print(f"Created {output_filename}.zip")
+    shutil.make_archive(os.path.join('dist', output_filename), 'zip', root_dir='dist', base_dir='WaveGauge')
+    print(f"Created dist/{output_filename}.zip")
 
 def package_source():
     version = get_version()
@@ -86,8 +86,8 @@ def package_source():
             
     # Zip
     print("Zipping Source Package...")
-    shutil.make_archive(output_name, 'zip', root_dir=dist_dir, base_dir=output_name)
-    print(f"Created {output_name}.zip")
+    shutil.make_archive(os.path.join(dist_dir, output_name), 'zip', root_dir=dist_dir, base_dir=output_name)
+    print(f"Created dist/{output_name}.zip")
 
 def main():
     parser = argparse.ArgumentParser(description='Build WaveGauge')

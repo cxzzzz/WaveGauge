@@ -65,12 +65,12 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: WaveGauge-${{ runner.os }}
-        path: WaveGauge-*.zip
+        path: dist/WaveGauge-*.zip
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: WaveGauge-*.zip
+        files: dist/WaveGauge-*.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
