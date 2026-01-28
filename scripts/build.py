@@ -85,9 +85,20 @@ def package_source():
         shutil.copy2(os.path.join('frontend', 'package.json'), frontend_dest)
     
     # Copy root files
-    for file in ['README.md', 'LICENSE']:
+    for file in ['README.md', 'LICENSE', 'Makefile']:
         if os.path.exists(file):
             shutil.copy2(file, package_dir)
+
+    # Copy scripts
+    if os.path.exists('scripts'):
+        print("Copying scripts...")
+        shutil.copytree('scripts', os.path.join(package_dir, 'scripts'), 
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    
+    # Copy data (if exists)
+    if os.path.exists('data'):
+        print("Copying data...")
+        shutil.copytree('data', os.path.join(package_dir, 'data'))
             
     # Zip
     print("Zipping Source Package...")

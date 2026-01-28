@@ -94,8 +94,8 @@ jobs:
         path: dist/WaveGauge-*.zip
         if-no-files-found: error
 
-  build-server-centos:
-    name: Build Server (CentOS 7)
+  build-source:
+    name: Build Source Distribution
     needs: frontend
     runs-on: ubuntu-latest
     steps:
@@ -107,24 +107,19 @@ jobs:
         name: frontend-dist
         path: frontend/dist
 
-    - name: Build in Manylinux Container
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/workspace \
-          -w /workspace \
-          quay.io/pypa/manylinux2014_x86_64 \
-          bash -c "yum install -y gcc && export PATH=/opt/python/cp311-cp311/bin:\$PATH && export LD_LIBRARY_PATH=/opt/python/cp311-cp311/lib:\$LD_LIBRARY_PATH && pip install --upgrade pip && pip install ./backend && pip install pyinstaller && python scripts/build.py --type exe --skip-frontend --mode server && chown -R \$(id -u):\$(id -g) dist"
+    - name: Create Source Package
+      run: python scripts/build.py --type source --skip-frontend
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: WaveGauge-CentOS7-Server
-        path: dist/WaveGauge-Server-*.zip
+        name: WaveGauge-Source
+        path: dist/WaveGauge-Source-*.zip
         if-no-files-found: error
 
   release:
     name: Create Release
-    needs: [build-desktop, build-server-centos]
+    needs: [build-desktop, build-source]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -143,6 +138,6 @@ jobs:
         files: |
           artifacts/WaveGauge-Linux/WaveGauge-*.zip
           artifacts/WaveGauge-Windows/WaveGauge-*.zip
-          artifacts/WaveGauge-CentOS7-Server/WaveGauge-Server-*.zip
+          artifacts/WaveGauge-Source/WaveGauge-Source-*.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
