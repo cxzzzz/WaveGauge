@@ -9,8 +9,34 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
+  frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install and Build Frontend
+      run: |
+        cd frontend
+        npm install
+        npm run build
+        
+    - name: Upload Frontend Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-dist
+        path: frontend/dist
+
+  build-desktop:
+    name: Build Desktop (${{ matrix.os }})
+    needs: frontend
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -20,18 +46,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Download Frontend Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-dist
+        path: frontend/dist
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         cache: 'pip'
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
 
     - name: Install Linux System Dependencies
       if: runner.os == 'Linux'
@@ -51,17 +76,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install ./backend[dev]
-        # Explicitly install pyinstaller if not in dev dependencies (though we added it)
         pip install pyinstaller
 
     - name: Create Source Package (Linux Only)
       if: runner.os == 'Linux'
       run: |
-        python scripts/build.py --type source
+        python scripts/build.py --type source --skip-frontend
         ls -R dist
 
     - name: Build Application
-      run: python scripts/build.py --type exe
+      run: python scripts/build.py --type exe --skip-frontend --mode desktop
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
@@ -70,10 +94,61 @@ jobs:
         path: dist/WaveGauge-*.zip
         if-no-files-found: error
 
+  build-server-centos:
+    name: Build Server (CentOS 7)
+    needs: frontend
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    env:
+      # Use Python 3.11 from manylinux
+      PATH: /opt/python/cp311-cp311/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download Frontend Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-dist
+        path: frontend/dist
+
+    - name: Install Python Dependencies
+      run: |
+        pip install --upgrade pip
+        pip install ./backend
+        pip install pyinstaller
+
+    - name: Build Server Application
+      run: python scripts/build.py --type exe --skip-frontend --mode server
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WaveGauge-CentOS7-Server
+        path: dist/WaveGauge-Server-*.zip
+        if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: [build-desktop, build-server-centos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Display structure of downloaded files
+      run: ls -R artifacts
+
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/WaveGauge-*.zip
+        files: |
+          artifacts/WaveGauge-Linux/WaveGauge-*.zip
+          artifacts/WaveGauge-Windows/WaveGauge-*.zip
+          artifacts/WaveGauge-CentOS7-Server/WaveGauge-Server-*.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

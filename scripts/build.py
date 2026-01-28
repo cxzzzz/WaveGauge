@@ -5,10 +5,10 @@ import shutil
 import platform
 import argparse
 
-def run_command(command, cwd=None, shell=True):
+def run_command(command, cwd=None, shell=True, env=None):
     print(f"Running: {command} in {cwd or '.'}")
     try:
-        subprocess.check_call(command, cwd=cwd, shell=shell)
+        subprocess.check_call(command, cwd=cwd, shell=shell, env=env)
     except subprocess.CalledProcessError as e:
         print(f"Error running command: {command}")
         sys.exit(1)
@@ -23,13 +23,16 @@ def build_frontend():
     
     run_command('npm run build', cwd=frontend_dir)
 
-def build_backend():
-    print("--- Building Backend ---")
+def build_backend(mode='desktop'):
+    print(f"--- Building Backend ({mode}) ---")
     # Install backend dependencies if needed (assuming they are installed in environment)
     # But for safety in CI/clean env, we might want to install them.
     # Here we assume the environment is already set up with requirements.
     
-    run_command(f'{sys.executable} -m PyInstaller build.spec --clean --noconfirm')
+    env = os.environ.copy()
+    env['BUILD_MODE'] = mode
+    
+    run_command(f'{sys.executable} -m PyInstaller build.spec --clean --noconfirm', env=env)
 
 def get_version():
     try:
@@ -41,16 +44,18 @@ def get_version():
         return "0.0.0"
     return "0.0.0"
 
-def zip_artifact():
-    print("--- Zipping Artifact ---")
-    dist_dir = os.path.join(os.getcwd(), 'dist', 'WaveGauge')
+def zip_artifact(mode='desktop'):
+    print(f"--- Zipping Artifact ({mode}) ---")
+    dist_dir = os.path.join(os.getcwd(), 'dist', 'WaveGauge' if mode == 'desktop' else 'WaveGauge-Server')
     version = get_version()
-    output_filename = f"WaveGauge-{version}-{platform.system()}-{platform.machine()}"
+    suffix = "-Server" if mode == 'server' else ""
+    output_filename = f"WaveGauge{suffix}-{version}-{platform.system()}-{platform.machine()}"
     
     # shutil.make_archive defaults to zip
     # root_dir is the directory that will be the root of the archive
     # base_dir is the directory inside root_dir that we want to archive
-    shutil.make_archive(os.path.join('dist', output_filename), 'zip', root_dir='dist', base_dir='WaveGauge')
+    base_dir = 'WaveGauge' if mode == 'desktop' else 'WaveGauge-Server'
+    shutil.make_archive(os.path.join('dist', output_filename), 'zip', root_dir='dist', base_dir=base_dir)
     print(f"Created dist/{output_filename}.zip")
 
 def package_source():
@@ -92,13 +97,16 @@ def package_source():
 def main():
     parser = argparse.ArgumentParser(description='Build WaveGauge')
     parser.add_argument('--type', choices=['exe', 'source', 'all'], default='exe', help='Build type: exe (default), source, or all')
+    parser.add_argument('--mode', choices=['desktop', 'server'], default='desktop', help='Build mode: desktop (default) or server (no GUI)')
+    parser.add_argument('--skip-frontend', action='store_true', help='Skip frontend build (use existing dist)')
     args = parser.parse_args()
     
-    build_frontend()
+    if not args.skip_frontend:
+        build_frontend()
     
     if args.type in ['exe', 'all']:
-        build_backend()
-        zip_artifact()
+        build_backend(mode=args.mode)
+        zip_artifact(mode=args.mode)
         
     if args.type in ['source', 'all']:
         package_source()

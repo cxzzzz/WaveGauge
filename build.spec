@@ -24,17 +24,26 @@ hidden_imports = [
 wk_datas, wk_binaries, wk_hiddenimports = collect_all('wavekit')
 hidden_imports += wk_hiddenimports
 
-# Collect pywebview
-pw_datas, pw_binaries, pw_hiddenimports = collect_all('webview')
-hidden_imports += pw_hiddenimports
+# Determine build mode
+build_mode = os.environ.get('BUILD_MODE', 'desktop')
+print(f"Building in {build_mode} mode")
 
-# Collect PyGObject (Linux)
-if sys.platform.startswith('linux'):
+# Collect pywebview & PyGObject (Desktop only)
+pw_datas, pw_binaries = [], []
+if build_mode == 'desktop':
     try:
-        from PyInstaller.utils.hooks import collect_submodules
-        hidden_imports += collect_submodules('gi')
-    except Exception:
-        pass
+        pw_datas, pw_binaries, pw_hiddenimports = collect_all('webview')
+        hidden_imports += pw_hiddenimports
+    except Exception as e:
+        print(f"Warning: Failed to collect webview: {e}")
+
+    # Collect PyGObject (Linux Desktop)
+    if sys.platform.startswith('linux'):
+        try:
+            from PyInstaller.utils.hooks import collect_submodules
+            hidden_imports += collect_submodules('gi')
+        except Exception:
+            pass
 
 # Add frontend dist
 # Ensure frontend/dist exists before running this, or PyInstaller might complain if it checks existence eagerly.
@@ -67,12 +76,12 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='WaveGauge',
+    name='WaveGauge' if build_mode == 'desktop' else 'WaveGauge-Server',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False, # Windowed mode for desktop app
+    console=(build_mode == 'server'), # Windowed mode for desktop app, Console for server
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -88,5 +97,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='WaveGauge',
+    name='WaveGauge' if build_mode == 'desktop' else 'WaveGauge-Server',
 )
