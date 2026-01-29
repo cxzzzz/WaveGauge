@@ -11,6 +11,7 @@ import {
 
 export type InstantData = {
   series: Record<string, { timestamps: Float64Array; values: Array<number | string> }>;
+  timeRange: [number, number];
   is_multiseries: boolean;
 };
 
@@ -23,7 +24,7 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
   ];
 
   getEmptyData(): InstantData {
-    return { series: {}, is_multiseries: false };
+    return { series: {}, timeRange: [0, 0], is_multiseries: false };
   }
 
   private getVisibleSeries(data: InstantData, zoomRange: { start: number; end: number }) {
@@ -31,40 +32,26 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
     if (!seriesEntries.length) {
       return { series: {} as InstantData['series'], window: null as null | [number, number] };
     }
-    const timestampSet = new Set<number>();
-    seriesEntries.forEach(([, series]) => {
-      series.timestamps.forEach((timestamp) => {
-        const numeric = Number(timestamp);
-        if (Number.isFinite(numeric)) {
-          timestampSet.add(numeric);
-        }
-      });
-    });
+
+    const [globalStart, globalEnd] = data.timeRange;
+    const globalDuration = globalEnd - globalStart;
     
-    // Use Float64Array for memory efficiency and speed
-    const allTimestamps = new Float64Array(timestampSet);
-    allTimestamps.sort();
-    
-    if (!allTimestamps.length) {
-      return { series: {} as InstantData['series'], window: null as null | [number, number] };
+    // If single point or duration 0, handle gracefully
+    if (globalDuration <= 0) {
+         // Return all data (or just the single point)
+         // If duration is 0, start == end.
+         // visibleStart/End will be same as globalStart/End
     }
-    const length = allTimestamps.length;
-    const startIndex = Math.max(
-      0,
-      Math.min(length - 1, Math.floor((zoomRange.start / 100) * (length - 1)))
-    );
-    const endIndex = Math.max(
-      startIndex,
-      Math.min(length - 1, Math.ceil((zoomRange.end / 100) * (length - 1)))
-    );
-    const windowStart = allTimestamps[startIndex]!;
-    const windowEnd = allTimestamps[endIndex]!;
+
+    // Calculate visible time window based on global time range
+    const visibleStart = globalStart + (zoomRange.start / 100) * globalDuration;
+    const visibleEnd = globalStart + (zoomRange.end / 100) * globalDuration;
 
     const filteredSeries: InstantData['series'] = {};
     seriesEntries.forEach(([key, series]) => {
       // Use binary search to find range in sorted series timestamps
-      const startIdx = this.findStartIndex(series.timestamps, windowStart);
-      const endIdx = this.findEndIndex(series.timestamps, windowEnd);
+      const startIdx = this.findStartIndex(series.timestamps, visibleStart);
+      const endIdx = this.findEndIndex(series.timestamps, visibleEnd);
       
       if (startIdx > endIdx) {
           filteredSeries[key] = { timestamps: new Float64Array(0), values: [] };
@@ -77,7 +64,7 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
       
       filteredSeries[key] = { timestamps, values };
     });
-    return { series: filteredSeries, window: [windowStart, windowEnd] as [number, number] };
+    return { series: filteredSeries, window: [visibleStart, visibleEnd] as [number, number] };
   }
 
   async runAnalysis(params: RunAnalysisParams): Promise<AnalysisRunResult<InstantData>> {
@@ -92,6 +79,7 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
     const payload = response.data.data;
     const processedData: InstantData = {
         is_multiseries: payload.is_multiseries,
+        timeRange: payload.time_range ? [payload.time_range[0], payload.time_range[1]] : [0, 0],
         series: {}
     };
     
@@ -169,7 +157,7 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
         type: 'inside',
         xAxisIndex: 0,
         start: zoomRange.start,
-        end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
+        end: zoomRange.end 
       },
       {
         type: 'slider',
@@ -177,7 +165,8 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
         height: '10%',
         bottom: '2%',
         start: zoomRange.start,
-        end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end
+        end: zoomRange.end === Number.MAX_SAFE_INTEGER ? undefined : zoomRange.end,
+        showDataShadow: false // Optimization: disable data shadow
       }
     ];
 
@@ -205,13 +194,16 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
           type: 'scatter',
           name: `${key}: ${label}`,
           data,
-          symbolSize: 8
+          symbolSize: 8,
+          large: true, // Optimization: large mode
+          largeThreshold: 2000 // Optimization: threshold for large mode
         });
       });
     });
 
     return {
       backgroundColor: 'transparent',
+      animation: false, // Optimization: disable animation
       grid: {
         top: '6%',
         bottom: '18%',

@@ -7,9 +7,11 @@ import {
   type RunAnalysisParams,
   type SummaryParams
 } from './AnalysisStrategy';
+import dsum from '@stdlib/blas/ext/base/dsum';
 
 export type CompleteData = {
   series: Record<string, { timestamps: Float64Array; values: Array<number | string>; durations: Float64Array }>;
+  timeRange: [number, number];
   is_multiseries: boolean;
 };
 
@@ -29,7 +31,7 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
   ];
 
   getEmptyData(): CompleteData {
-    return { series: {}, is_multiseries: false };
+    return { series: {}, timeRange: [0, 0], is_multiseries: false };
   }
 
   async runAnalysis(params: RunAnalysisParams): Promise<AnalysisRunResult<CompleteData>> {
@@ -55,6 +57,7 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
     // Convert arrays to Float64Array
     const processedData: CompleteData = {
         is_multiseries: result.data.is_multiseries,
+        timeRange: result.data.time_range ? [result.data.time_range[0], result.data.time_range[1]] : [0, 0],
         series: {}
     };
     
@@ -73,43 +76,84 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
     };
   }
 
-  calculateSummary(params: SummaryParams<CompleteData>): Record<string, number> {
-    const { data, summaryType, zoomRange } = params;
-    const { min, max } = this.getTimeBounds(data);
-    const visible = this.getVisibleRange(zoomRange, min, max);
-    const result: Record<string, number> = {};
+  private getVisibleSeries(data: CompleteData, zoomRange: { start: number; end: number }) {
+    const visible: Record<string, { 
+      timestamps: Float64Array; 
+      durations: Float64Array; 
+      count: number 
+    }> = {};
+
+    // Calculate visible time window based on global time range
+    const [globalStart, globalEnd] = data.timeRange;
+    const globalDuration = globalEnd - globalStart;
+    const visibleStart = globalStart + (zoomRange.start / 100) * globalDuration;
+    const visibleEnd = globalStart + (zoomRange.end / 100) * globalDuration;
 
     for (const [key, series] of Object.entries(data.series)) {
       const { timestamps, durations } = series;
-      if (timestamps.length === 0) {
-        result[key] = Number.NaN;
+      const len = timestamps.length;
+      if (len === 0) {
+        visible[key] = { timestamps: new Float64Array(0), durations: new Float64Array(0), count: 0 };
         continue;
       }
 
-      // Optimization: We can binary search the END of the range: timestamps[i] < visible.end.
-      // So we can stop iterating early when start time exceeds visible window.
-      const loopEnd = this.findStartIndex(timestamps, visible.end);
-      
-      let count = 0;
-      let durationSum = 0;
-      
-      for (let i = 0; i < loopEnd; i++) {
-        const start = timestamps[i];
-        const duration = durations[i];
-        if (start === undefined || duration === undefined) continue;
-        const end = start + duration;
-        
-        // Count if the interval overlaps with visible window
-        if (end > visible.start) {
-            count++;
-            durationSum += duration;
-        }
+      // Calculate end times: endTimes = timestamps + durations
+      // Use a simple loop which is faster than daxpy
+      const endTimes = new Float64Array(len);
+      for (let i = 0; i < len; i++) {
+        endTimes[i] = timestamps[i]! + durations[i]!;
       }
-      
+
+      // Find range:
+      // startIdx: first index where timestamps[i] >= visibleStart
+      // endIdx: last index where endTimes[i] <= visibleEnd
+      const startIdx = this.findStartIndex(timestamps, visibleStart);
+      const endIdx = this.findEndIndex(endTimes, visibleEnd);
+
+      if (startIdx > endIdx) {
+        visible[key] = { timestamps: new Float64Array(0), durations: new Float64Array(0), count: 0 };
+        continue;
+      }
+
+      // Slice the data
+      visible[key] = {
+        timestamps: timestamps.subarray(startIdx, endIdx + 1),
+        durations: durations.subarray(startIdx, endIdx + 1),
+        count: endIdx - startIdx + 1
+      };
+    }
+
+    return visible;
+  }
+
+  calculateSummary(params: SummaryParams<CompleteData>): Record<string, number> {
+    const { data, summaryType, zoomRange } = params;
+    const visibleSeries = this.getVisibleSeries(data, zoomRange);
+    const result: Record<string, number> = {};
+
+    for (const [key, series] of Object.entries(visibleSeries)) {
+      if (series.count === 0) {
+        result[key] = summaryType === 'count' ? 0 : Number.NaN; // Assuming 0 for count, NaN for avg if empty? 
+        // Original logic: if timestamps.length === 0 -> NaN. 
+        // If sliced is empty -> count=0. 
+        // Let's match original logic closer:
+        // Original logic: if (timestamps.length === 0) result[key] = NaN; continue;
+        // Then inside loop if no overlap count=0.
+        // So if original series was empty, getVisibleSeries returns empty.
+        // If original series was NOT empty but no overlap, getVisibleSeries returns empty.
+        // To be precise: if count is 0, then result is 0 for count, 0 for avg (original code: count > 0 ? sum/count : 0).
+        if (summaryType === 'count') result[key] = 0;
+        else if (summaryType === 'avg_duration') result[key] = 0;
+        continue;
+      }
+
       if (summaryType === 'count') {
-        result[key] = count;
+        result[key] = series.count;
       } else if (summaryType === 'avg_duration') {
-        result[key] = count > 0 ? durationSum / count : 0;
+        // Calculate sum of durations in the range
+        // We use dsum on the subarray of durations
+        const durationSum = dsum(series.count, series.durations, 1);
+        result[key] = series.count > 0 ? durationSum / series.count : 0;
       }
     }
 
@@ -121,39 +165,6 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
     return {}; 
   }
 
-  private getTimeBounds(data: CompleteData): { min: number; max: number } {
-    let min = Number.POSITIVE_INFINITY;
-    let max = Number.NEGATIVE_INFINITY;
-    Object.values(data.series).forEach((series) => {
-      series.timestamps.forEach((start, index) => {
-        if (start === undefined) {
-          return;
-        }
-        const duration = series.durations[index] ?? 0;
-        const end = start + duration;
-        if (start < min) min = start;
-        if (end > max) max = end;
-      });
-    });
-    if (!Number.isFinite(min) || !Number.isFinite(max)) {
-      return { min: 0, max: 0 };
-    }
-    return { min, max };
-  }
-
-  private getVisibleRange(zoomRange: { start: number; end: number }, min: number, max: number) {
-    const range = max - min;
-    if (range <= 0) {
-      return { start: min, end: max };
-    }
-    const startPercent = Math.min(100, Math.max(0, zoomRange.start));
-    const endPercent = Math.min(100, Math.max(0, zoomRange.end === Number.MAX_SAFE_INTEGER ? 100 : zoomRange.end));
-    return {
-      start: min + (range * startPercent) / 100,
-      end: min + (range * endPercent) / 100
-    };
-  }
-
   buildChartOption(params: ChartOptionParams<CompleteData>): echarts.EChartsOption {
     const { data, isDark, zoomRange } = params;
     const seriesKeys = Object.keys(data.series);
@@ -161,7 +172,7 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
 
     const chartData: any[] = [];
     const categories = seriesKeys;
-    const { min, max } = this.getTimeBounds(data);
+    const [min, max] = data.timeRange;
     const dataZoom: echarts.DataZoomComponentOption[] = [
       {
         type: 'inside',
@@ -174,7 +185,8 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
         height: '10%',
         bottom: '2%',
         start: zoomRange.start,
-        end: zoomRange.end
+        end: zoomRange.end,
+        showDataShadow: false // Optimization: disable data shadow
       }
     ];
     
@@ -252,6 +264,7 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
     }
 
     return {
+      animation: false, // Optimization: disable animation
       tooltip: {
         formatter: (params: any) => {
           const val = params.value;
@@ -307,6 +320,7 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
       series: [{
         type: 'custom',
         renderItem: renderItem as any,
+        clip: true, // Optimization: enable clipping
         itemStyle: {
           opacity: 0.8
         },

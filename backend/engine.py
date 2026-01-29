@@ -126,6 +126,7 @@ class CounterSeries(TypedDict):
 
 class CounterAnalysisResult(TypedDict):
     series: dict[str, CounterSeries]
+    time_range: list[float | int]
     is_multiseries: bool
 
 
@@ -136,6 +137,7 @@ class InstantSeries(TypedDict):
 
 class InstantAnalysisResult(TypedDict):
     series: dict[str, InstantSeries]
+    time_range: list[float | int]
     is_multiseries: bool
 
 
@@ -147,6 +149,7 @@ class CompleteSeries(TypedDict):
 
 class CompleteAnalysisResult(TypedDict):
     series: dict[str, CompleteSeries]
+    time_range: list[float | int]
     is_multiseries: bool
 
 
@@ -222,6 +225,7 @@ class AnalysisEngine:
 
         return CounterAnalysisResult(
             series=series,
+            time_range=[data[next(iter(data))].time[0], data[next(iter(data))].time[-1]],
             is_multiseries=is_multiseries,
         )
 
@@ -248,6 +252,7 @@ class AnalysisEngine:
 
         return InstantAnalysisResult(
             series=series,
+            time_range=[data[next(iter(data))].time[0], data[next(iter(data))].time[-1]],
             is_multiseries=is_multiseries,
         )
 
@@ -276,5 +281,6 @@ class AnalysisEngine:
 
         return CompleteAnalysisResult(
             series=series,
+            time_range=[data[next(iter(data))].time[0], data[next(iter(data))].time[-1]],
             is_multiseries=is_multiseries,
         )

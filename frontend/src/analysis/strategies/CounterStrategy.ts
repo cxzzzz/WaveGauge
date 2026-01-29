@@ -13,6 +13,7 @@ import dsum from '@stdlib/blas/ext/base/dsum';
 
 export type CounterData = {
   series: Record<string, { timestamps: Float64Array; values: Float64Array }>;
+  timeRange: [number, number];
   is_multiseries: boolean;
 };
 
@@ -33,10 +34,10 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
   ];
 
   getEmptyData(): CounterData {
-    return { series: {}, is_multiseries: false };
+    return { series: {}, timeRange: [0, 0], is_multiseries: false };
   }
 
-  private getVisibleData(data: CounterData, zoomRange: { start: number; end: number }) {
+  private getVisibleSeries(data: CounterData, zoomRange: { start: number; end: number }) {
     const entries = Object.entries(data.series);
     if (!entries.length) {
       return { timestamps: new Float64Array(0), values: {} as Record<string, Float64Array> };
@@ -51,20 +52,27 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
     if (!length) {
       return { timestamps: new Float64Array(0), values: {} as Record<string, Float64Array> };
     }
-    const startIndex = Math.max(
-      0,
-      Math.min(length - 1, Math.floor((zoomRange.start / 100) * (length - 1)))
-    );
-    const endIndex = Math.max(
-      startIndex,
-      Math.min(length - 1, Math.ceil((zoomRange.end / 100) * (length - 1)))
-    );
+
+    const [globalStart, globalEnd] = data.timeRange;
+    const globalDuration = globalEnd - globalStart;
+
+    // Calculate visible time window based on global time range
+    const visibleStart = globalStart + (zoomRange.start / 100) * globalDuration;
+    const visibleEnd = globalStart + (zoomRange.end / 100) * globalDuration;
+
+    // Use binary search to find range in sorted series timestamps
+    const startIdx = this.findStartIndex(timestamps, visibleStart);
+    const endIdx = this.findEndIndex(timestamps, visibleEnd);
+
+    if (startIdx > endIdx) {
+         return { timestamps: new Float64Array(0), values: {} as Record<string, Float64Array> };
+    }
     
     // Use subarray for zero-copy view
-    const slicedTimestamps = timestamps.subarray(startIndex, endIndex + 1);
+    const slicedTimestamps = timestamps.subarray(startIdx, endIdx + 1);
     const values: Record<string, Float64Array> = {};
     entries.forEach(([key, series]) => {
-      values[key] = series.values.subarray(startIndex, endIndex + 1);
+      values[key] = series.values.subarray(startIdx, endIdx + 1);
     });
     return { timestamps: slicedTimestamps, values };
   }
@@ -83,6 +91,7 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
     const payload = response.data.data;
     const processedData: CounterData = {
       is_multiseries: payload.is_multiseries,
+      timeRange: payload.time_range ? [payload.time_range[0], payload.time_range[1]] : [0, 0],
       series: {}
     };
 
@@ -98,7 +107,7 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
 
   calculateSummary(params: SummaryParams<CounterData>): Record<string, number> {
     const { data, summaryType, zoomRange } = params;
-    const visible = this.getVisibleData(data, zoomRange);
+    const visible = this.getVisibleSeries(data, zoomRange);
     const keys = Object.keys(visible.values);
 
     const summarize = (values: Float64Array): number => {
@@ -117,21 +126,19 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
 
   getDisplayMaxValues(params: DisplayMaxParams<CounterData>): Record<string, number> {
     const { data, userMaxValue, zoomRange } = params;
-    const visible = this.getVisibleData(data, zoomRange);
+    const visible = this.getVisibleSeries(data, zoomRange);
     const keys = Object.keys(visible.values);
     if (Number.isFinite(userMaxValue)) {
       return Object.fromEntries(keys.map(key => [key, Number(userMaxValue)]));
     }
     return Object.fromEntries(
       keys.map((key) => {
-        const values = visible.values[key] ?? [];
+        const values = visible.values[key]!
         let maxVal = 0;
-        values.forEach((item) => {
-          const value = Number(item);
-          if (Number.isFinite(value) && value > maxVal) {
-            maxVal = value;
-          }
-        });
+        const len = values.length;
+        if (len > 0) {
+            maxVal = dmax(len, values, 1);
+        }
         return [key, maxVal];
       })
     );
@@ -139,7 +146,7 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
 
   buildChartOption(params: ChartOptionParams<CounterData>): echarts.EChartsOption {
     const { data, chartType, zoomRange, userMaxValue, isDark } = params;
-    const visible = this.getVisibleData(data, zoomRange);
+    const visible = this.getVisibleSeries(data, zoomRange);
     const textColor = isDark ? '#a0a0a0' : '#666';
     const axisColor = isDark ? '#404040' : '#e0e0e0';
     const steps = Array.from(visible.timestamps, String);
@@ -158,12 +165,14 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
         height: '10%',
         bottom: '2%',
         start: zoomRange.start,
-        end: zoomRange.end
+        end: zoomRange.end,
+        showDataShadow: false // Optimization: disable data shadow
       }
     ];
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
+      animation: false, // Optimization: disable animation for large datasets
       grid: {
         top: '6%',
         bottom: gridBottom,
@@ -250,7 +259,8 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
             type: 'line',
             smooth: true,
             showSymbol: false,
-            areaStyle: { opacity: 0.1 }
+            areaStyle: { opacity: 0.1 },
+            sampling: 'lttb' // Optimization: downsampling
           };
           if (isStacked) {
             lineItem.stack = 'total';
@@ -260,7 +270,8 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
         const barItem: echarts.BarSeriesOption = {
           name: key,
           data: dataPoints,
-          type: 'bar'
+          type: 'bar',
+          large: true // Optimization: large mode for bars
         };
         if (isStacked) {
           barItem.stack = 'total';
