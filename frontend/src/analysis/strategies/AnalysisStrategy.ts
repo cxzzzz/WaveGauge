@@ -50,4 +50,38 @@ export abstract class AnalysisStrategy<TData> {
   abstract calculateSummary(params: SummaryParams<TData>): Record<string, number>;
   abstract getDisplayMaxValues(params: DisplayMaxParams<TData>): Record<string, number>;
   abstract buildChartOption(params: ChartOptionParams<TData>): echarts.EChartsOption;
+
+  protected findStartIndex(timestamps: Float64Array, minTime: number): number {
+    let low = 0;
+    let high = timestamps.length - 1;
+    let idx = timestamps.length;
+    
+    while (low <= high) {
+      const mid = (low + high) >>> 1;
+      if (timestamps[mid]! >= minTime) {
+        idx = mid;
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+    return idx;
+  }
+
+  protected findEndIndex(timestamps: Float64Array, maxTime: number): number {
+    let low = 0;
+    let high = timestamps.length - 1;
+    let idx = -1;
+
+    while (low <= high) {
+      const mid = (low + high) >>> 1;
+      if (timestamps[mid]! <= maxTime) {
+        idx = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return idx;
+  }
 }

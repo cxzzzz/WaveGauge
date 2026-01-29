@@ -10,7 +10,7 @@ import {
 } from './AnalysisStrategy';
 
 export type InstantData = {
-  series: Record<string, { timestamps: number[]; values: Array<number | string> }>;
+  series: Record<string, { timestamps: Float64Array; values: Array<number | string> }>;
   is_multiseries: boolean;
 };
 
@@ -40,7 +40,11 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
         }
       });
     });
-    const allTimestamps = Array.from(timestampSet).sort((a, b) => a - b);
+    
+    // Use Float64Array for memory efficiency and speed
+    const allTimestamps = new Float64Array(timestampSet);
+    allTimestamps.sort();
+    
     if (!allTimestamps.length) {
       return { series: {} as InstantData['series'], window: null as null | [number, number] };
     }
@@ -58,15 +62,19 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
 
     const filteredSeries: InstantData['series'] = {};
     seriesEntries.forEach(([key, series]) => {
-      const timestamps: number[] = [];
-      const values: Array<number | string> = [];
-      series.timestamps.forEach((timestamp, index) => {
-        const numeric = Number(timestamp);
-        if (!Number.isFinite(numeric)) return;
-        if (numeric < windowStart || numeric > windowEnd) return;
-        timestamps.push(numeric);
-        values.push(series.values[index] ?? Number.NaN);
-      });
+      // Use binary search to find range in sorted series timestamps
+      const startIdx = this.findStartIndex(series.timestamps, windowStart);
+      const endIdx = this.findEndIndex(series.timestamps, windowEnd);
+      
+      if (startIdx > endIdx) {
+          filteredSeries[key] = { timestamps: new Float64Array(0), values: [] };
+          return;
+      }
+      
+      const timestamps = series.timestamps.subarray(startIdx, endIdx + 1);
+      // values is a standard array, so we use slice
+      const values = series.values.slice(startIdx, endIdx + 1);
+      
       filteredSeries[key] = { timestamps, values };
     });
     return { series: filteredSeries, window: [windowStart, windowEnd] as [number, number] };
@@ -80,8 +88,21 @@ export class InstantStrategy extends AnalysisStrategy<InstantData> {
     if (response.data.status !== 'success') {
       throw new Error(String(response.data.error ?? 'Unknown error'));
     }
-    const payload = response.data.data as InstantData;
-    return { data: payload, isMultiseries: payload.is_multiseries };
+    
+    const payload = response.data.data;
+    const processedData: InstantData = {
+        is_multiseries: payload.is_multiseries,
+        series: {}
+    };
+    
+    for (const key in payload.series) {
+        processedData.series[key] = {
+            timestamps: new Float64Array(payload.series[key].timestamps),
+            values: payload.series[key].values // Keep as is
+        };
+    }
+    
+    return { data: processedData, isMultiseries: processedData.is_multiseries };
   }
 
   calculateSummary(params: SummaryParams<InstantData>): Record<string, number> {

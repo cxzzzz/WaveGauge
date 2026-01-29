@@ -8,9 +8,11 @@ import {
   type RunAnalysisParams,
   type SummaryParams
 } from './AnalysisStrategy';
+import { dmean, dmax, dmin } from '@stdlib/stats/base';
+import dsum from '@stdlib/blas/ext/base/dsum';
 
 export type CounterData = {
-  series: Record<string, { timestamps: number[]; values: number[] }>;
+  series: Record<string, { timestamps: Float64Array; values: Float64Array }>;
   is_multiseries: boolean;
 };
 
@@ -37,17 +39,17 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
   private getVisibleData(data: CounterData, zoomRange: { start: number; end: number }) {
     const entries = Object.entries(data.series);
     if (!entries.length) {
-      return { timestamps: [], values: {} as Record<string, number[]> };
+      return { timestamps: new Float64Array(0), values: {} as Record<string, Float64Array> };
     }
     const firstEntry = entries[0];
     if (!firstEntry) {
-      return { timestamps: [], values: {} as Record<string, number[]> };
+      return { timestamps: new Float64Array(0), values: {} as Record<string, Float64Array> };
     }
     const [, firstSeries] = firstEntry;
-    const timestamps = firstSeries.timestamps ?? [];
+    const timestamps = firstSeries.timestamps;
     const length = timestamps.length;
     if (!length) {
-      return { timestamps: [], values: {} as Record<string, number[]> };
+      return { timestamps: new Float64Array(0), values: {} as Record<string, Float64Array> };
     }
     const startIndex = Math.max(
       0,
@@ -57,10 +59,12 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
       startIndex,
       Math.min(length - 1, Math.ceil((zoomRange.end / 100) * (length - 1)))
     );
-    const slicedTimestamps = timestamps.slice(startIndex, endIndex + 1);
-    const values: Record<string, number[]> = {};
+    
+    // Use subarray for zero-copy view
+    const slicedTimestamps = timestamps.subarray(startIndex, endIndex + 1);
+    const values: Record<string, Float64Array> = {};
     entries.forEach(([key, series]) => {
-      values[key] = (series.values ?? []).slice(startIndex, endIndex + 1);
+      values[key] = series.values.subarray(startIndex, endIndex + 1);
     });
     return { timestamps: slicedTimestamps, values };
   }
@@ -76,8 +80,20 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
       throw new Error(String(response.data.error ?? 'Unknown error'));
     }
 
-    const payload = response.data.data as CounterData;
-    return { data: payload, isMultiseries: payload.is_multiseries };
+    const payload = response.data.data;
+    const processedData: CounterData = {
+      is_multiseries: payload.is_multiseries,
+      series: {}
+    };
+
+    for (const key in payload.series) {
+      processedData.series[key] = {
+        timestamps: new Float64Array(payload.series[key].timestamps),
+        values: new Float64Array(payload.series[key].values)
+      };
+    }
+
+    return { data: processedData, isMultiseries: processedData.is_multiseries };
   }
 
   calculateSummary(params: SummaryParams<CounterData>): Record<string, number> {
@@ -85,17 +101,18 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
     const visible = this.getVisibleData(data, zoomRange);
     const keys = Object.keys(visible.values);
 
-    const summarize = (values: number[]): number => {
-      const numericValues = values.map(Number).filter(Number.isFinite);
-      if (!numericValues.length) return Number.NaN;
-      if (summaryType === 'max') return Math.max(...numericValues);
-      if (summaryType === 'min') return Math.min(...numericValues);
-      if (summaryType === 'sum') return numericValues.reduce((acc, val) => acc + val, 0);
-      const total = numericValues.reduce((acc, val) => acc + val, 0);
-      return total / numericValues.length;
+    const summarize = (values: Float64Array): number => {
+      const N = values.length;
+      if (N === 0) return Number.NaN;
+      
+      // @stdlib/stats/base functions take (N, x, stride)
+      if (summaryType === 'max') return dmax(N, values, 1);
+      if (summaryType === 'min') return dmin(N, values, 1);
+      if (summaryType === 'sum') return dsum(N, values, 1);
+      return dmean(N, values, 1);
     };
 
-    return Object.fromEntries(keys.map(key => [key, summarize(visible.values[key] || [])]));
+    return Object.fromEntries(keys.map(key => [key, summarize(visible.values[key] || new Float64Array(0))]));
   }
 
   getDisplayMaxValues(params: DisplayMaxParams<CounterData>): Record<string, number> {
@@ -125,7 +142,7 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
     const visible = this.getVisibleData(data, zoomRange);
     const textColor = isDark ? '#a0a0a0' : '#666';
     const axisColor = isDark ? '#404040' : '#e0e0e0';
-    const steps = visible.timestamps.map(item => String(item));
+    const steps = Array.from(visible.timestamps, String);
     const keys = Object.keys(visible.values);
     const gridBottom = '20%';
 

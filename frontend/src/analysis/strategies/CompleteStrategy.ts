@@ -9,7 +9,7 @@ import {
 } from './AnalysisStrategy';
 
 export type CompleteData = {
-  series: Record<string, { timestamps: number[]; values: Array<number | string>; durations: number[] }>;
+  series: Record<string, { timestamps: Float64Array; values: Array<number | string>; durations: Float64Array }>;
   is_multiseries: boolean;
 };
 
@@ -51,8 +51,24 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
     }
     
     const result = await response.json();
+    
+    // Convert arrays to Float64Array
+    const processedData: CompleteData = {
+        is_multiseries: result.data.is_multiseries,
+        series: {}
+    };
+    
+    for (const key in result.data.series) {
+        const series = result.data.series[key];
+        processedData.series[key] = {
+            timestamps: new Float64Array(series.timestamps),
+            durations: new Float64Array(series.durations),
+            values: series.values // Keep mixed/string array as is
+        };
+    }
+    
     return { 
-      data: result.data, 
+      data: processedData, 
       isMultiseries: result.data.is_multiseries 
     };
   }
@@ -64,27 +80,39 @@ export class CompleteStrategy extends AnalysisStrategy<CompleteData> {
     const result: Record<string, number> = {};
 
     for (const [key, series] of Object.entries(data.series)) {
+      const { timestamps, durations } = series;
+      if (timestamps.length === 0) {
+        result[key] = Number.NaN;
+        continue;
+      }
+
+      // Optimization: We can binary search the END of the range: timestamps[i] < visible.end.
+      // So we can stop iterating early when start time exceeds visible window.
+      const loopEnd = this.findStartIndex(timestamps, visible.end);
+      
       let count = 0;
       let durationSum = 0;
-      const { timestamps, durations } = series;
-      for (let i = 0; i < timestamps.length; i++) {
+      
+      for (let i = 0; i < loopEnd; i++) {
         const start = timestamps[i];
-        if (start === undefined) {
-          continue;
-        }
-        const duration = durations[i] ?? 0;
+        const duration = durations[i];
+        if (start === undefined || duration === undefined) continue;
         const end = start + duration;
-        if (start < visible.end && end > visible.start) {
-          count++;
-          durationSum += duration;
+        
+        // Count if the interval overlaps with visible window
+        if (end > visible.start) {
+            count++;
+            durationSum += duration;
         }
       }
-      if (summaryType === 'avg_duration') {
-        result[key] = count ? durationSum / count : Number.NaN;
-      } else {
+      
+      if (summaryType === 'count') {
         result[key] = count;
+      } else if (summaryType === 'avg_duration') {
+        result[key] = count > 0 ? durationSum / count : 0;
       }
     }
+
     return result;
   }
 

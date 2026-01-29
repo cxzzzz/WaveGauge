@@ -11,6 +11,8 @@
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",
     "@codemirror/theme-one-dark": "^6.1.3",
+    "@stdlib/array": "^0.3.3",
+    "@stdlib/stats": "^0.3.3",
     "@types/uuid": "^10.0.0",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.13.2",
