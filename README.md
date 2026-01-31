@@ -1,5 +1,7 @@
 # WaveGauge
 
+[中文文档](README_zh-CN.md)
+
 WaveGauge is a modern, web-based visualization tool for hardware waveform analysis. It enables engineers to load simulation waveforms (VCD/FSDB) and define analysis metrics using Python scripts, providing real-time, interactive charts for performance insights.
 
 WaveGauge replaces manual waveform inspection with "Code-as-Metric" flexibility, allowing for automated, reproducible, and complex analysis of hardware designs.
