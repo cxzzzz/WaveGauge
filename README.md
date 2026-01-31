@@ -4,6 +4,8 @@ WaveGauge is a modern, web-based visualization tool for hardware waveform analys
 
 WaveGauge replaces manual waveform inspection with "Code-as-Metric" flexibility, allowing for automated, reproducible, and complex analysis of hardware designs.
 
+![WaveGauge Demo](assets/demo.webp)
+
 ## Key Features
 
 - **Multi-Format Support**: Seamlessly parse VCD (Value Change Dump) and FSDB (Fast Signal DataBase) waveform files.
