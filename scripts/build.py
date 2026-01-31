@@ -62,7 +62,7 @@ def package_source():
     version = get_version()
     print(f"--- Packaging Source (Version: {version}) ---")
     
-    output_name = f"WaveGauge-Source-{version}"
+    output_name = f"WaveGauge-{version}-Source"
     dist_dir = os.path.join(os.getcwd(), 'dist')
     package_dir = os.path.join(dist_dir, output_name)
     
