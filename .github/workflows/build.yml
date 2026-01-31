@@ -114,7 +114,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: WaveGauge-Source
-        path: dist/WaveGauge-Source-*.zip
+        path: dist/WaveGauge-*-Source.zip
         if-no-files-found: error
 
   release:
@@ -138,6 +138,6 @@ jobs:
         files: |
           artifacts/WaveGauge-Linux/WaveGauge-*.zip
           artifacts/WaveGauge-Windows/WaveGauge-*.zip
-          artifacts/WaveGauge-Source/WaveGauge-Source-*.zip
+          artifacts/WaveGauge-Source/WaveGauge-*-Source.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
