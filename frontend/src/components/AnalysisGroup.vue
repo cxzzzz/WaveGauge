@@ -132,6 +132,7 @@
               baselineMap: contextModel.baselineMap,
               tabId: contextModel.tabId
             }"
+            :is-active-tab="props.isActiveTab"
             :is-root="false"
             :ancestor-collapsed="effectiveCollapsed"
             :ref="(el: any) => setChildRef(el, child.id)"
@@ -143,6 +144,7 @@
             :ref="(el: any) => setChildRef(el, child.id)"
             v-model:core="child.core"
             :context="buildAnalysisContext(child)"
+            :is-active-tab="props.isActiveTab"
             :ancestor-collapsed="effectiveCollapsed"
             @update:context="(val) => updateChildContext(child.id, val)"
             @delete="deleteChild(index)"
@@ -201,6 +203,7 @@ const props = defineProps<{
   core: GroupCore;
   context: GroupContext;
   isRoot: boolean;
+  isActiveTab: boolean;
   ancestorCollapsed?: boolean;
 }>();
 

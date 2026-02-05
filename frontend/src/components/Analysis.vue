@@ -302,6 +302,7 @@ type AnalysisContext = {
 const props = defineProps<{
   core: AnalysisCore;
   context: AnalysisContext;
+  isActiveTab: boolean;
   ancestorCollapsed?: boolean;
 }>();
 
@@ -321,6 +322,7 @@ const updateContext = (patch: Partial<AnalysisContext>) => {
 const name = computed(() => props.core.name);
 const description = computed(() => props.core.description);
 const transformCode = computed(() => props.core.transformCode);
+const isActiveTab = computed(() => props.isActiveTab ?? true);
 const isEditingName = ref(false);
 const localName = ref(props.core.name);
 const nameInput = ref<HTMLInputElement | null>(null);
@@ -699,6 +701,7 @@ watch(showTimeline, async (val) => {
 watch([zoomRange, baselineZoomRange], () => {
   if (props.ancestorCollapsed) return;
   if (!showTimeline.value) return;
+  if (!isActiveTab.value) return;
   if (chartInstance) {
     applyZoomAction(chartInstance, zoomRange.value);
   }
@@ -715,7 +718,9 @@ watch(
     const isMaxChanged = newMax !== oldMax && !(Number.isNaN(Number(newMax)) && Number.isNaN(Number(oldMax)));
 
     if (isDataChanged || isTypeChanged || isMaxChanged) {
-      if (showTimeline.value) { updateCharts() } 
+      if (showTimeline.value && isActiveTab.value) {
+        updateCharts();
+      }
     }
   }
 );
@@ -727,6 +732,15 @@ watch([baselineData, hasBaselineComparison], () => {
       initCharts();
     });
   }
+});
+
+watch(isActiveTab, (active) => {
+  if (!active) return;
+  if (!showTimeline.value) return;
+  disposeCharts();
+  nextTick().then(() => {
+    initCharts();
+  });
 });
 
 // Handle Resize

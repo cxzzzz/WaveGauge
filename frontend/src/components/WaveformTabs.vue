@@ -64,6 +64,7 @@
           groupPath: '',
           tabId: tab.id
         }"
+        :is-active-tab="tab.id === activeTabId"
         :is-root="true"
       />
     </a-tab-pane>
