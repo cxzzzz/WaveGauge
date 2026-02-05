@@ -104,7 +104,10 @@ const calcDelta = (current: number, baseline: number) => {
   if (!Number.isFinite(cur) || !Number.isFinite(base)) {
     throw new Error('Invalid delta inputs');
   }
-  if (base === 0) return cur >= 0 ? 'pos_inf' : 'neg_inf';
+  if (base === 0) {
+    if (cur === 0) return 0;
+    return cur >= 0 ? 'pos_inf' : 'neg_inf';
+  }
   return ((cur - base) / base) * 100;
 };
 
@@ -130,6 +133,7 @@ const delta = computed(() => {
 const deltaPercentText = computed(() => {
   if (delta.value === 'pos_inf') return '(+∞)';
   if (delta.value === 'neg_inf') return '(-∞)';
+  if (delta.value === 0) return '(0.0%)';
   return `(${delta.value >= 0 ? '+' : '-'}${Math.abs(delta.value).toFixed(1)}%)`;
 });
 const deltaPercentClass = computed(() => {
