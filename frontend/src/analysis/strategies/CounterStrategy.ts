@@ -125,23 +125,39 @@ export class CounterStrategy extends AnalysisStrategy<CounterData> {
   }
 
   getDisplayMaxValues(params: DisplayMaxParams<CounterData>): Record<string, number> {
-    const { data, userMaxValue, zoomRange } = params;
+    const { data, userMaxValue, zoomRange, chartType } = params;
     const visible = this.getVisibleSeries(data, zoomRange);
     const keys = Object.keys(visible.values);
     if (Number.isFinite(userMaxValue)) {
       return Object.fromEntries(keys.map(key => [key, Number(userMaxValue)]));
     }
-    return Object.fromEntries(
-      keys.map((key) => {
-        const values = visible.values[key]!
-        let maxVal = 0;
-        const len = values.length;
-        if (len > 0) {
-            maxVal = dmax(len, values, 1);
-        }
-        return [key, maxVal];
-      })
-    );
+    const isStacked = chartType === 'stacked_bar' || chartType === 'stacked_line';
+    if (isStacked) {
+      const len = visible.timestamps.length;
+      const sums = new Float64Array(len);
+      const perStep = new Float64Array(keys.length);
+      for (let index = 0; index < len; index += 1) {
+        keys.forEach((key, keyIndex) => {
+          const values = visible.values[key] ?? new Float64Array(0);
+          const raw = Number(values[index]);
+          perStep[keyIndex] = Number.isFinite(raw) ? raw : 0;
+        });
+        sums[index] = dsum(keys.length, perStep, 1);
+      }
+      const maxSum = dmax(len, sums, 1);
+      const globalMax = Number.isFinite(maxSum) ? maxSum : 0;
+      return Object.fromEntries(keys.map(key => [key, globalMax]));
+    }
+    const perSeriesMax = new Float64Array(keys.length);
+    keys.forEach((key, index) => {
+      const values = visible.values[key] ?? new Float64Array(0);
+      const len = values.length;
+      const maxVal = dmax(len, values, 1);
+      perSeriesMax[index] = Number.isFinite(maxVal) ? maxVal : 0;
+    });
+    const maxVal = dmax(keys.length, perSeriesMax, 1);
+    const globalMax = Number.isFinite(maxVal) ? maxVal : 0;
+    return Object.fromEntries(keys.map(key => [key, globalMax]));
   }
 
   buildChartOption(params: ChartOptionParams<CounterData>): echarts.EChartsOption {

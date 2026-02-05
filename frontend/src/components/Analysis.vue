@@ -404,7 +404,8 @@ const displayMaxValues = computed(() => {
     data: dataModel.value,
     summaryValues: summaryValues.value,
     userMaxValue: maxValueValue.value,
-    zoomRange: zoomRange.value
+    zoomRange: zoomRange.value,
+    chartType: chartTypeValue.value
   });
 });
 

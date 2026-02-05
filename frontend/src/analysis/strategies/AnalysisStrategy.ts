@@ -34,6 +34,7 @@ export type DisplayMaxParams<TData> = {
   summaryValues: Record<string, number>;
   userMaxValue: number;
   zoomRange: ZoomRange;
+  chartType: string;
 };
 
 export type OptionItem = {
