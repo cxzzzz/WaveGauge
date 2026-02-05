@@ -161,7 +161,7 @@ class AnalysisEngine:
 
     @log_exceptions
     def load_matched_waveforms(self, pattern: Any, clock: str | None = None, **kwargs: Any) -> Any:
-        return self.reader.load_matched_waveforms(pattern, clock=clock, **kwargs)
+        return self.reader.load_matched_waveforms(pattern, clock_pattern=clock, **kwargs)
 
     def execute_transform(self, code: str) -> Any:
         aeval = Interpreter(
